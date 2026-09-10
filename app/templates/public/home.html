@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Stylo Drywall | Qualidade, Precisão e Acabamento{% endblock %}
+{% block body %}
+<header class="public-header">
+  <div class="public-nav container">
+    <a class="public-logo" href="#inicio"><img src="{{url_for('static',filename='img/logo.png')}}" alt="Stylo Drywall"><span>STYLO<small>DRYWALL</small></span></a>
+    <button class="nav-toggle" aria-label="Abrir menu"><i class="bi bi-list"></i></button>
+    <nav>
+      <a class="active" href="#inicio">Início</a><a href="#sobre">Sobre</a><a href="#servicos">Serviços</a><a href="#projetos">Projetos</a><a href="#diferenciais">Depoimentos</a><a href="#contato">Contato</a>
+    </nav>
+    <a class="quote-button" href="{{url_for('public.quote_request')}}"><i class="bi bi-whatsapp"></i> Solicitar orçamento</a>
+  </div>
+</header>
+
+<main>
+  <section class="new-hero" id="inicio">
+    <div class="new-hero-bg"></div>
+    <div class="container new-hero-inner">
+      <div class="new-hero-copy">
+        <span class="overline">• DRYWALL QUE TRANSFORMA AMBIENTES</span>
+        <h1>Seu projeto com<br>mais <em>estilo</em> e<br><em>qualidade.</em></h1>
+        <p>Soluções em drywall para residências, comércios e empresas. Mais praticidade, beleza e funcionalidade para o seu espaço.</p>
+        <div class="hero-buttons"><a class="quote-button" href="{{url_for('public.quote_request')}}"><i class="bi bi-whatsapp"></i> Solicitar orçamento</a><a class="video-link" href="#projetos"><i class="bi bi-play-fill"></i><span>ASSISTA<br>NOSSO VÍDEO</span></a></div>
+      </div>
+      <span class="hero-script">Ambientes<br>que inspiram</span>
+    </div>
+  </section>
+
+  <section class="benefits"><div class="container benefits-grid">
+    <article><i class="bi bi-shield-check"></i><p><b>QUALIDADE</b><span>em cada detalhe</span></p></article>
+    <article><i class="bi bi-bullseye"></i><p><b>PRECISÃO</b><span>na execução</span></p></article>
+    <article><i class="bi bi-clock"></i><p><b>PRAZO</b><span>que você pode confiar</span></p></article>
+    <article><i class="bi bi-gem"></i><p><b>ACABAMENTO</b><span>que faz a diferença</span></p></article>
+  </div></section>
+
+  <section class="home-services" id="servicos"><div class="container">
+    <div class="home-section-head"><div><span class="overline gold-text">NOSSOS SERVIÇOS</span><h2>Soluções completas<br>em <em>Drywall</em></h2></div><p>Trabalhamos com projetos personalizados, sempre focando na qualidade, no prazo e no acabamento.</p><a class="line-button" href="{{url_for('public.quote_request')}}">VER TODOS OS SERVIÇOS <i class="bi bi-arrow-right"></i></a></div>
+    <div class="visual-service-grid">
+      {% set cards=[('03_forros_gesso_drywall.jpg','bi-stars','Forros em Drywall','Mais beleza e sofisticação para o seu ambiente.'),('04_divisorias_drywall.jpg','bi-layout-split','Divisórias','Organize seus espaços com praticidade.'),('10_nichos_iluminacao.jpg','bi-window','Paredes e Nichos','Design e funcionalidade em um só projeto.'),('09_tratamento_acustico.jpg','bi-layers','Tratamento Acústico','Conforto e bem-estar para o seu dia a dia.')] %}
+      {% for photo,icon,title,text in cards %}<article><img src="{{url_for('static',filename='img/stylo_drywall_fotos/'+photo)}}" alt="{{title}}"><div><i class="bi {{icon}}"></i><section><h3>{{title}}</h3><p>{{text}}</p></section></div></article>{% endfor %}
+    </div>
+  </div></section>
+
+  <section class="home-projects" id="projetos"><div class="container projects-layout">
+    <div class="projects-intro"><span class="overline">• PROJETOS REALIZADOS</span><h2>Resultados<br>que falam por nós.</h2><p>Confira alguns projetos que já transformamos em realidade.</p><a class="line-button light" href="{{url_for('public.quote_request')}}">VER MAIS PROJETOS <i class="bi bi-arrow-right"></i></a></div>
+    <div class="project-gallery">{% for photo,name in [('15_projeto_residencial.jpg','Residencial'),('16_projeto_comercial.jpg','Comercial'),('17_projeto_corporativo.jpg','Corporativo')] %}<article><img src="{{url_for('static',filename='img/stylo_drywall_fotos/'+photo)}}" alt="Projeto {{name}}"><b>{{name}}</b></article>{% endfor %}</div>
+  </div></section>
+
+  <section class="choice" id="diferenciais"><div class="container choice-inner"><div><span class="overline gold-text">POR QUE ESCOLHER A STYLO DRYWALL?</span><h2>Mais que drywall,<br><em>confiança</em> em cada projeto.</h2></div><div class="choice-items"><article><i class="bi bi-people"></i><span>Atendimento<br>personalizado</span></article><article><i class="bi bi-person-gear"></i><span>Equipe<br>especializada</span></article><article><i class="bi bi-clipboard-check"></i><span>Materiais<br>de alta qualidade</span></article><article><i class="bi bi-check-circle"></i><span>Entrega<br>no prazo</span></article></div></div></section>
+
+  <section class="final-cta" id="contato"><div class="container final-cta-inner"><div><h2>Vamos tirar seu projeto<br><em>do papel?</em></h2><p>Fale com a nossa equipe e solicite um orçamento sem compromisso.<br>Estamos prontos para transformar o seu ambiente!</p></div><div><a class="quote-button" href="{{url_for('public.quote_request')}}"><i class="bi bi-whatsapp"></i> Solicitar orçamento</a><small>Atendimento rápido e sem compromisso.</small></div></div></section>
+</main>
+
+<footer class="public-footer"><div class="container"><a class="public-logo" href="#inicio"><img src="{{url_for('static',filename='img/logo.png')}}"><span>STYLO<small>DRYWALL</small></span></a><nav><a href="#inicio">Início</a><a href="#sobre">Sobre</a><a href="#servicos">Serviços</a><a href="#projetos">Projetos</a><a href="#contato">Contato</a></nav><div class="social"><i class="bi bi-instagram"></i><i class="bi bi-facebook"></i></div><small>Stylo Drywall<br>Todos os direitos reservados. © 2026</small></div></footer>
+<a class="floating-whatsapp" href="https://wa.me/{{whatsapp}}?text=Olá%2C%20vim%20pelo%20site%20da%20Stylo%20Drywall%20e%20gostaria%20de%20solicitar%20um%20orçamento." target="_blank" rel="noopener" aria-label="Falar com a Stylo Drywall pelo WhatsApp"><i class="bi bi-whatsapp"></i></a>
+{% endblock %}

@@ -14,7 +14,7 @@ flask --app run.py create-admin
 flask --app run.py run
 ```
 
-Acesse `http://127.0.0.1:5000` e o painel em `/admin`.
+Acesse `http://127.0.0.1:1515` e o painel em `/admin`.
 
 Em produção, defina uma `SECRET_KEY` forte, use PostgreSQL em `DATABASE_URL`, ative `SESSION_COOKIE_SECURE=true`, configure HTTPS e um backend persistente para o rate limiter.
 
