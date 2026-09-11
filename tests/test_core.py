@@ -3,7 +3,7 @@ import pytest
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
-from app.models import Role, User, Unit, Category, Product
+from app.models import Role, User, Unit, Category, Product, Purchase
 from app.services import move_stock
 
 @pytest.fixture()
@@ -35,3 +35,37 @@ def test_negative_stock_is_blocked(app):
         item,user=product()
         with pytest.raises(ValueError): move_stock(item,"Saída",Decimal("99"),user)
 
+def test_purchase_accepts_blank_optional_dimensions(app):
+    with app.app_context():
+        role=Role(name="ADMINISTRADOR")
+        user=User(name="Teste",email="teste@stylo.local",password_hash="x",role=role)
+        unit=Unit(code="UN",name="Unidade")
+        category=Category(name="Placas")
+        db.session.add_all([role,user,unit,category]); db.session.commit()
+        user_id, unit_id, category_id = user.id, unit.id, category.id
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+    response=client.post("/admin/compras",data={
+        "product_name":"Placa teste",
+        "unit_id":str(unit_id),
+        "category_id":str(category_id),
+        "quantity":"2",
+        "unit_cost":"10,50",
+        "sale_price":"",
+        "minimum_stock":"",
+        "piece_length":"",
+        "piece_width":"",
+        "piece_height":"",
+        "purchase_date":"2026-09-10",
+    })
+
+    assert response.status_code == 302
+    with app.app_context():
+        assert Purchase.query.count() == 1
+        created = Product.query.filter_by(name="Placa teste").one()
+        assert created.piece_height is None
+        assert created.current_quantity == Decimal("2.000")

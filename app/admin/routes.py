@@ -117,8 +117,11 @@ def quote_request_status(request_id):
     return redirect(url_for("admin.quote_request_detail", request_id=request_id))
 
 def decimal_field(name, default="0"):
+    value = request.form.get(name)
+    if value is None or not value.strip():
+        value = default
     try:
-        return Decimal(request.form.get(name, default).replace(",", "."))
+        return Decimal(str(value).strip().replace(",", "."))
     except (InvalidOperation, AttributeError):
         raise ValueError(f"Valor inválido no campo {name}.")
 
