@@ -441,6 +441,22 @@ def projects():
             db.session.rollback(); flash(str(error), "danger")
     return render_template("admin/projects.html", projects=Project.query.order_by(Project.id.desc()).all(), customers=Customer.query.order_by(Customer.name).all(), today=date.today().isoformat())
 
+@bp.post("/obras/<int:project_id>/concluir")
+def complete_project(project_id):
+    project = db.get_or_404(Project, project_id)
+    if project.status == "Concluída":
+        flash("Esta obra já está concluída.", "success")
+    else:
+        previous = project.status
+        project.status = "Concluída"
+        project.completed_at = date.today()
+        audit("Obra concluída", "obras", project.id, current_user,
+              old={"status": previous}, new={"status": project.status, "data": project.completed_at.isoformat()},
+              ip=request.remote_addr)
+        db.session.commit()
+        flash(f"Obra “{project.name}” marcada como concluída.", "success")
+    return redirect(url_for("admin.projects"))
+
 @bp.route("/obras/<int:project_id>", methods=["GET", "POST"])
 def project_detail(project_id):
     project = db.get_or_404(Project, project_id)
@@ -448,14 +464,93 @@ def project_detail(project_id):
         try:
             product = db.get_or_404(Product, int(request.form["product_id"]))
             quantity = decimal_field("quantity")
-            movement = move_stock(product, "Uso em obra", quantity, current_user, product.average_cost, project=project, notes=f"Material usado na obra {project.name}")
-            db.session.flush()
-            material = ProjectMaterial(project=project, product=product, quantity=quantity, unit_cost=movement.unit_cost, total_cost=movement.total_cost)
-            db.session.add(material); db.session.commit(); flash("Material lançado e retirado do estoque.", "success")
+            material = ProjectMaterial(project=project, product=product, quantity=quantity,
+                                       unit_cost=product.average_cost or 0,
+                                       total_cost=quantity * Decimal(product.average_cost or 0))
+            db.session.add(material); db.session.flush()
+            move_stock(product, "Uso em obra", quantity, current_user, product.average_cost,
+                       project=project, notes=f"Material #{material.id} da obra #{project.id}")
+            db.session.commit(); flash("Material adicionado à obra, retirado do estoque e incluído no custo.", "success")
             return redirect(url_for("admin.project_detail", project_id=project.id))
         except (ValueError, KeyError) as error:
             db.session.rollback(); flash(str(error), "danger")
     return render_template("admin/project_detail.html", project=project, products=Product.query.filter_by(active=True).order_by(Product.name).all())
+
+@bp.route("/obras/<int:project_id>/editar", methods=["GET", "POST"])
+def edit_project(project_id):
+    project = db.get_or_404(Project, project_id)
+    if request.method == "POST":
+        try:
+            name = " ".join(request.form.get("name", "").split())
+            if not name: raise ValueError("Informe o nome da obra.")
+            project.name = name
+            project.customer_id = int(request.form["customer_id"])
+            project.address = request.form.get("address")
+            project.start_date = date.fromisoformat(request.form.get("start_date") or date.today().isoformat())
+            project.expected_end = date.fromisoformat(request.form["expected_end"]) if request.form.get("expected_end") else None
+            project.sale_value = decimal_field("sale_value")
+            project.labor_cost = decimal_field("labor_cost")
+            project.other_cost = decimal_field("other_cost")
+            project.status = request.form.get("status", "Em andamento")
+            audit("Obra editada", "obras", project.id, current_user, new={"nome": name, "status": project.status}, ip=request.remote_addr)
+            db.session.commit(); flash("Obra atualizada e custos recalculados.", "success")
+            return redirect(url_for("admin.project_detail", project_id=project.id))
+        except (ValueError, KeyError) as error:
+            db.session.rollback(); flash(str(error), "danger")
+    return render_template("admin/project_edit.html", project=project, customers=Customer.query.order_by(Customer.name).all())
+
+@bp.route("/obras/<int:project_id>/materiais/<int:material_id>/editar", methods=["GET", "POST"])
+def edit_project_material(project_id, material_id):
+    project = db.get_or_404(Project, project_id)
+    material = ProjectMaterial.query.filter_by(id=material_id, project_id=project.id).first_or_404()
+    if request.method == "POST":
+        try:
+            quantity = decimal_field("quantity")
+            if quantity <= 0: raise ValueError("A quantidade precisa ser maior que zero.")
+            old_quantity = Decimal(material.quantity)
+            difference = quantity - old_quantity
+            if difference:
+                move_stock(material.product, "Uso em obra" if difference > 0 else "Devolução",
+                           abs(difference), current_user, material.unit_cost, project=project,
+                           notes=f"Correção do material #{material.id} da obra #{project.id}")
+            material.quantity = quantity
+            material.total_cost = quantity * Decimal(material.unit_cost or 0)
+            audit("Material da obra editado", "obras", project.id, current_user,
+                  old={"quantidade": str(old_quantity)}, new={"quantidade": str(quantity)}, ip=request.remote_addr)
+            db.session.commit(); flash("Quantidade corrigida. Estoque e custo da obra foram atualizados.", "success")
+            return redirect(url_for("admin.project_detail", project_id=project.id))
+        except ValueError as error:
+            db.session.rollback(); flash(str(error), "danger")
+    return render_template("admin/project_material_edit.html", project=project, material=material)
+
+@bp.post("/obras/<int:project_id>/materiais/<int:material_id>/remover")
+def delete_project_material(project_id, material_id):
+    project = db.get_or_404(Project, project_id)
+    material = ProjectMaterial.query.filter_by(id=material_id, project_id=project.id).first_or_404()
+    material.product.current_quantity = Decimal(material.product.current_quantity or 0) + Decimal(material.quantity)
+    StockMovement.query.filter(
+        StockMovement.project_id == project.id,
+        StockMovement.notes.like(f"%material #{material.id} da obra #{project.id}%"),
+    ).delete(synchronize_session=False)
+    db.session.delete(material)
+    audit("Material removido da obra", "obras", project.id, current_user,
+          old={"produto": material.product.name, "quantidade": str(material.quantity)}, ip=request.remote_addr)
+    db.session.commit(); flash("Material removido da obra e devolvido ao estoque.", "success")
+    return redirect(url_for("admin.project_detail", project_id=project.id))
+
+@bp.post("/obras/<int:project_id>/remover")
+def delete_project(project_id):
+    project = db.get_or_404(Project, project_id)
+    for material in list(project.materials):
+        material.product.current_quantity = Decimal(material.product.current_quantity or 0) + Decimal(material.quantity)
+        db.session.delete(material)
+    StockMovement.query.filter_by(project_id=project.id).delete(synchronize_session=False)
+    FinancialEntry.query.filter_by(project_id=project.id).delete(synchronize_session=False)
+    old = {"nome": project.name, "materiais": len(project.materials)}
+    db.session.delete(project)
+    audit("Obra excluída", "obras", project_id, current_user, old=old, ip=request.remote_addr)
+    db.session.commit(); flash("Obra excluída. Todos os materiais foram devolvidos ao estoque.", "success")
+    return redirect(url_for("admin.projects"))
 
 @bp.route("/calculadora", methods=["GET", "POST"])
 def calculator():

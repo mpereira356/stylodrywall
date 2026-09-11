@@ -1,0 +1,5 @@
+{% extends 'admin/base.html' %}
+{% block admin %}
+<div class="page-heading"><div><a class="detail-back" href="{{url_for('admin.project_detail',project_id=project.id)}}"><i class="bi bi-arrow-left"></i> Voltar para a obra</a><h1>Corrigir material</h1><p>{{material.product.name}}</p></div></div>
+<div class="panel material-edit-panel"><div class="screen-guide"><b>Saldo disponível: {{material.product.current_quantity|br_number}} {{material.product.unit.code}}</b><span>Ao aumentar, a diferença sairá do estoque. Ao diminuir, a diferença voltará ao estoque.</span></div><form method="post"><input type="hidden" name="csrf_token" value="{{csrf_token()}}"><label>Quantidade usada<input class="input" name="quantity" inputmode="decimal" value="{{material.quantity|br_number}}" required></label><button class="btn gold wide">Salvar e ajustar estoque</button></form></div>
+{% endblock %}

@@ -124,3 +124,16 @@ if(location.pathname.includes('/estoque/produto/')&&location.pathname.endsWith('
     addFieldHint(document.querySelector('[name="minimum_stock"]')?.closest('label'),'Ao chegar nesta quantidade, o sistema mostrará o aviso “Estoque baixo”.');
     addFieldHint(document.querySelector('[name="current_quantity"]')?.closest('label'),'Digite o saldo real: 12 para doze ou 12.000 para doze mil.');
 }
+if(location.pathname.endsWith('/obras')){
+    const csrf=document.querySelector('input[name="csrf_token"]')?.value||'';
+    document.querySelectorAll('.record-grid > a.record-card').forEach(card=>{
+        const match=card.getAttribute('href')?.match(/\/obras\/(\d+)$/);if(!match)return;
+        const status=card.querySelector('span')?.textContent||'';
+        if(status.includes('Concluída')){const badge=document.createElement('span');badge.className='badge success completed-badge';badge.innerHTML='<i class="bi bi-check-circle"></i> Concluída';card.appendChild(badge);return;}
+        const form=document.createElement('form');form.className='complete-project-form';form.method='post';form.action=`/admin/obras/${match[1]}/concluir`;
+        form.innerHTML=`<input type="hidden" name="csrf_token" value="${csrf}"><button type="submit" class="btn complete-btn"><i class="bi bi-check2-circle"></i> Concluir obra</button>`;
+        form.addEventListener('click',event=>event.stopPropagation());
+        form.addEventListener('submit',event=>{event.stopPropagation();if(!confirm('Marcar esta obra como concluída?'))event.preventDefault();});
+        card.appendChild(form);
+    });
+}

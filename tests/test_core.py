@@ -4,7 +4,7 @@ import pytest
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
-from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry, StockMovement
+from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry, StockMovement, Customer, Project, ProjectMaterial
 from app.services import move_stock
 from app.admin.routes import decimal_field
 
@@ -192,3 +192,65 @@ def test_delete_product_removes_balance_and_history(app):
     with app.app_context():
         assert db.session.get(Product, product_id) is None
         assert StockMovement.query.filter_by(product_id=product_id).count() == 0
+
+def test_project_material_edit_remove_and_project_delete_sync_stock(app):
+    with app.app_context():
+        item, user = product()
+        item.average_cost = Decimal("4")
+        customer = Customer(name="Cliente")
+        project = Project(name="Obra teste", customer=customer, start_date=date(2026, 9, 10), sale_value=1000, labor_cost=100, other_cost=50)
+        db.session.add_all([customer, project]); db.session.commit()
+        project_id, product_id, user_id = project.id, item.id, user.id
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+    response=client.post(f"/admin/obras/{project_id}",data={"product_id":str(product_id),"quantity":"3"})
+    assert response.status_code == 302
+    with app.app_context():
+        material = ProjectMaterial.query.one()
+        material_id = material.id
+        assert material.total_cost == Decimal("12.00")
+        assert db.session.get(Product, product_id).current_quantity == Decimal("7.500")
+
+    response=client.post(f"/admin/obras/{project_id}/materiais/{material_id}/editar",data={"quantity":"5"})
+    assert response.status_code == 302
+    with app.app_context():
+        assert db.session.get(Product, product_id).current_quantity == Decimal("5.500")
+        assert db.session.get(ProjectMaterial, material_id).total_cost == Decimal("20.00")
+
+    response=client.post(f"/admin/obras/{project_id}/materiais/{material_id}/remover")
+    assert response.status_code == 302
+    with app.app_context():
+        assert db.session.get(Product, product_id).current_quantity == Decimal("10.500")
+        assert db.session.get(ProjectMaterial, material_id) is None
+
+    response=client.post(f"/admin/obras/{project_id}",data={"product_id":str(product_id),"quantity":"2"})
+    assert response.status_code == 302
+    response=client.post(f"/admin/obras/{project_id}/remover")
+    assert response.status_code == 302
+    with app.app_context():
+        assert db.session.get(Project, project_id) is None
+        assert db.session.get(Product, product_id).current_quantity == Decimal("10.500")
+        assert StockMovement.query.filter_by(project_id=project_id).count() == 0
+
+def test_complete_project_sets_status_and_completion_date(app):
+    with app.app_context():
+        _, user = product()
+        customer = Customer(name="Cliente")
+        project = Project(name="Obra para concluir", customer=customer, start_date=date(2026, 9, 10), status="Em andamento")
+        db.session.add_all([customer, project]); db.session.commit()
+        project_id, user_id = project.id, user.id
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+    response=client.post(f"/admin/obras/{project_id}/concluir")
+    assert response.status_code == 302
+    with app.app_context():
+        completed = db.session.get(Project, project_id)
+        assert completed.status == "Concluída"
+        assert completed.completed_at == date.today()

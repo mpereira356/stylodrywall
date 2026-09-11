@@ -1,0 +1,12 @@
+{% extends 'admin/base.html' %}
+{% block admin %}
+<div class="page-heading"><div><a class="detail-back" href="{{url_for('admin.project_detail',project_id=project.id)}}"><i class="bi bi-arrow-left"></i> Voltar para a obra</a><h1>Editar obra</h1><p>Atualize os dados e valores. Os materiais já lançados serão mantidos.</p></div></div>
+<div class="panel project-edit-panel"><form method="post"><input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+<label>Cliente<select class="input" name="customer_id" required>{% for x in customers %}<option value="{{x.id}}" {% if x.id==project.customer_id %}selected{% endif %}>{{x.name}}</option>{% endfor %}</select></label>
+<label>Nome da obra<input class="input" name="name" value="{{project.name}}" required></label>
+<label>Endereço<input class="input" name="address" value="{{project.address or ''}}"></label>
+<div class="form-grid"><label>Início<input class="input" type="date" name="start_date" value="{{project.start_date.isoformat() if project.start_date else ''}}"></label><label>Previsão de término<input class="input" type="date" name="expected_end" value="{{project.expected_end.isoformat() if project.expected_end else ''}}"></label>
+<label>Valor cobrado<input class="input" name="sale_value" inputmode="decimal" value="{{project.sale_value|br_money}}"></label><label>Mão de obra<input class="input" name="labor_cost" inputmode="decimal" value="{{project.labor_cost|br_money}}"></label><label>Outros custos<input class="input" name="other_cost" inputmode="decimal" value="{{project.other_cost|br_money}}"></label>
+<label>Status<select class="input" name="status">{% for x in ['Orçamento','Aguardando início','Em andamento','Pausada','Concluída','Cancelada'] %}<option {% if x==project.status %}selected{% endif %}>{{x}}</option>{% endfor %}</select></label></div>
+<button class="btn gold wide">Salvar alterações da obra</button></form></div>
+{% endblock %}
