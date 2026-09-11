@@ -117,13 +117,24 @@ def quote_request_status(request_id):
     return redirect(url_for("admin.quote_request_detail", request_id=request_id))
 
 def decimal_field(name, default="0"):
+    field_labels = {
+        "quantity": "Quantidade",
+        "unit_cost": "Custo por unidade",
+        "sale_price": "Preço de venda",
+        "minimum_stock": "Estoque mínimo",
+        "piece_length": "Comprimento da peça",
+        "piece_width": "Largura da peça",
+        "piece_height": "Espessura da peça",
+        "unit_price": "Preço por unidade",
+    }
     value = request.form.get(name)
     if value is None or not value.strip():
         value = default
     try:
         return Decimal(str(value).strip().replace(",", "."))
     except (InvalidOperation, AttributeError):
-        raise ValueError(f"Valor inválido no campo {name}.")
+        label = field_labels.get(name, name)
+        raise ValueError(f"Confira o campo “{label}”. Digite somente números, por exemplo: 10,50.")
 
 def generate_product_code(name, category, length=None, width=None):
     def clean(value):
@@ -146,6 +157,11 @@ def generate_product_code(name, category, length=None, width=None):
     while Product.query.filter_by(internal_code=code).first():
         sequence += 1; code = f"{prefix}-{sequence:03d}"
     return code
+
+def product_name_exists(name):
+    normalized = " ".join(name.split()).casefold()
+    return any(" ".join(product_name.split()).casefold() == normalized
+               for product_name, in db.session.query(Product.name).all())
 
 @bp.route("/fornecedores", methods=["GET", "POST"])
 def suppliers():
@@ -189,8 +205,10 @@ def purchases():
             else:
                 unit = db.get_or_404(Unit, int(request.form["unit_id"]))
                 category = db.get_or_404(Category, int(request.form["category_id"]))
-                name = request.form.get("product_name", "").strip()
+                name = " ".join(request.form.get("product_name", "").split())
                 if not name: raise ValueError("Informe o nome do novo produto.")
+                if product_name_exists(name):
+                    raise ValueError("Já existe um produto cadastrado com esse nome. Selecione-o na lista de produtos já cadastrados.")
                 length = decimal_field("piece_length") or None
                 width = decimal_field("piece_width") or None
                 code = generate_product_code(name, category, length, width)

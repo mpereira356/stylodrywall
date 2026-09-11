@@ -69,3 +69,30 @@ def test_purchase_accepts_blank_optional_dimensions(app):
         created = Product.query.filter_by(name="Placa teste").one()
         assert created.piece_height is None
         assert created.current_quantity == Decimal("2.000")
+
+def test_purchase_rejects_duplicate_product_name(app):
+    with app.app_context():
+        existing, user = product()
+        user_id = user.id
+        unit_id = existing.unit_id
+        category_id = existing.category_id
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+    response=client.post("/admin/compras",data={
+        "product_name":"  canaleta   48MM ",
+        "unit_id":str(unit_id),
+        "category_id":str(category_id),
+        "quantity":"1",
+        "unit_cost":"5",
+        "purchase_date":"2026-09-10",
+    })
+
+    assert response.status_code == 200
+    assert "Já existe um produto cadastrado com esse nome" in response.get_data(as_text=True)
+    with app.app_context():
+        assert Product.query.count() == 1
+        assert Purchase.query.count() == 0
