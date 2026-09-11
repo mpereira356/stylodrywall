@@ -106,3 +106,4 @@ footer img{width:50px;height:50px;object-fit:cover}
 .record-actions{display:flex;align-items:center;gap:7px;margin-left:auto}.record-actions form{margin:0}.small-btn{padding:8px 10px;background:#efeee9;color:#343530;font-size:9px}.danger-btn{background:#f8e5e2;color:#9b3933}.edit-purchase-panel{max-width:760px}.edit-purchase-panel .screen-guide{margin-top:0}@media(max-width:600px){.record-card{flex-wrap:wrap}.record-actions{width:100%;margin:8px 0 0 54px}}
 @media(max-width:900px){input.input,select.input,textarea.input,.currency-input .input{font-size:16px}.currency-prefix{font-size:14px}}
 .product-edit-panel{max-width:900px}.form-section{margin:0 0 22px;padding:18px;background:#faf9f6;border:1px solid #ebe7de}.form-section h2{margin:0 0 5px;color:#795b24}.form-section>.hint{margin:0 0 8px}
+.table-actions{display:flex;gap:6px;align-items:center;white-space:nowrap}.table-actions form{margin:0}

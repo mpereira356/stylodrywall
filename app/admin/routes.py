@@ -5,7 +5,7 @@ import math
 import re
 import unicodedata
 from math import ceil
-from flask import Blueprint, render_template, flash, redirect, url_for, request
+from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app
 from flask_login import login_required, current_user
 from ..extensions import db
 from ..models import Product, StockMovement, FinancialEntry, Project, ContactRequest, Customer, Supplier, Unit, Category, Purchase, PurchaseItem, ProjectMaterial, Sale, SaleItem
@@ -108,6 +108,26 @@ def edit_product(internal_code):
                            units=Unit.query.filter_by(active=True).all(),
                            categories=Category.query.order_by(Category.name).all(),
                            suppliers=Supplier.query.filter_by(active=True).order_by(Supplier.company_name).all())
+
+@bp.post("/estoque/produto/<string:internal_code>/remover")
+def delete_product(internal_code):
+    product = Product.query.filter_by(internal_code=internal_code).first_or_404()
+    has_history = any((
+        StockMovement.query.filter_by(product_id=product.id).first(),
+        PurchaseItem.query.filter_by(product_id=product.id).first(),
+        SaleItem.query.filter_by(product_id=product.id).first(),
+        ProjectMaterial.query.filter_by(product_id=product.id).first(),
+    ))
+    if Decimal(product.current_quantity or 0) != 0 or has_history:
+        flash("Este produto não pode ser excluído porque possui saldo ou histórico. Abra “Editar produto” e marque-o como inativo para ocultá-lo das listas.", "danger")
+        return redirect(url_for("admin.inventory"))
+    old = {"nome": product.name, "codigo": product.internal_code}
+    product_id = product.id
+    db.session.delete(product)
+    audit("Produto excluído", "estoque", product_id, current_user, old=old, ip=request.remote_addr)
+    db.session.commit()
+    flash("Produto excluído definitivamente.", "success")
+    return redirect(url_for("admin.inventory"))
 
 @bp.route("/movimentacoes", methods=["GET", "POST"])
 def movements():
@@ -332,9 +352,15 @@ def delete_purchase(purchase_id):
     purchase = db.get_or_404(Purchase, purchase_id)
     try:
         for item in purchase.items:
-            move_stock(item.product, "Saída", item.quantity, current_user, item.unit_cost,
-                       supplier=purchase.supplier, notes=f"Remoção da compra #{purchase.id}",
-                       document=purchase.document)
+            current_stock = Decimal(item.product.current_quantity or 0)
+            quantity = Decimal(item.quantity)
+            if current_stock < quantity and not current_app.config["ALLOW_NEGATIVE_STOCK"]:
+                raise ValueError("Estoque insuficiente")
+            item.product.current_quantity = current_stock - quantity
+        StockMovement.query.filter(db.or_(
+            StockMovement.notes == f"Compra #{purchase.id}",
+            StockMovement.notes == f"Edição da compra #{purchase.id}",
+        )).delete(synchronize_session=False)
         entry = purchase_financial_entry(purchase.id)
         old = {"total": str(purchase.total), "itens": len(purchase.items)}
         if entry: db.session.delete(entry)

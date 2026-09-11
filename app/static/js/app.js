@@ -88,9 +88,13 @@ if(location.pathname.endsWith('/estoque')){
     if(panel){const guide=document.createElement('div');guide.className='screen-guide';guide.innerHTML='<b>Como entender esta tela</b><span>A quantidade mostra o saldo disponível. “Estoque baixo” avisa que o produto chegou ao mínimo definido.</span>';panel.prepend(guide);}
     document.querySelectorAll('.table-wrap tbody tr').forEach(row=>{
         const code=row.querySelector('code')?.textContent.trim();if(!code)return;
-        const cell=document.createElement('td'),edit=document.createElement('a');
+        const cell=document.createElement('td'),actions=document.createElement('div'),edit=document.createElement('a');actions.className='table-actions';
         edit.className='btn small-btn';edit.href=`/admin/estoque/produto/${encodeURIComponent(code)}/editar`;edit.innerHTML='<i class="bi bi-pencil"></i> Editar produto';
-        cell.appendChild(edit);row.appendChild(cell);
+        const remove=document.createElement('form');remove.method='post';remove.action=`/admin/estoque/produto/${encodeURIComponent(code)}/remover`;
+        const csrf=document.querySelector('input[name="csrf_token"]')?.value||'';
+        remove.innerHTML=`<input type="hidden" name="csrf_token" value="${csrf}"><button type="submit" class="btn small-btn danger-btn"><i class="bi bi-trash"></i> Excluir</button>`;
+        remove.addEventListener('submit',event=>{const name=row.querySelector('td:nth-child(2)')?.textContent.trim();if(!confirm(`Excluir definitivamente o produto “${name}”? Esta ação não poderá ser desfeita.`))event.preventDefault();});
+        actions.append(edit,remove);cell.appendChild(actions);row.appendChild(cell);
     });
     const headerRow=document.querySelector('.table-wrap thead tr');if(headerRow){const header=document.createElement('th');header.textContent='Ações';headerRow.appendChild(header);}
 }

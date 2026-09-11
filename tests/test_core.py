@@ -4,7 +4,7 @@ import pytest
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
-from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry
+from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry, StockMovement
 from app.services import move_stock
 
 @pytest.fixture()
@@ -130,6 +130,7 @@ def test_edit_and_delete_purchase_adjust_stock_and_financial(app):
         assert db.session.get(Purchase, purchase_id) is None
         assert Product.query.one().current_quantity == Decimal("5.500")
         assert FinancialEntry.query.filter(FinancialEntry.description.like(f"Compra #{purchase_id} -%" )).count() == 0
+        assert StockMovement.query.filter(StockMovement.notes.like(f"%compra #{purchase_id}%" )).count() == 0
 
 def test_edit_product_updates_all_data_and_regenerates_code(app):
     with app.app_context():
@@ -156,3 +157,26 @@ def test_edit_product_updates_all_data_and_regenerates_code(app):
         assert updated.estimated_price == Decimal("19.90")
         assert updated.minimum_stock == Decimal("3.500")
         assert updated.current_quantity == Decimal("10.500")
+
+def test_delete_product_requires_zero_balance_and_no_history(app):
+    with app.app_context():
+        item, user = product()
+        code, product_id, user_id = item.internal_code, item.id, user.id
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+    response=client.post(f"/admin/estoque/produto/{code}/remover",follow_redirects=True)
+    assert "não pode ser excluído porque possui saldo ou histórico" in response.get_data(as_text=True)
+    with app.app_context():
+        item = db.session.get(Product, product_id)
+        assert item is not None
+        item.current_quantity = 0
+        db.session.commit()
+
+    response=client.post(f"/admin/estoque/produto/{code}/remover",follow_redirects=True)
+    assert "Produto excluído definitivamente" in response.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(Product, product_id) is None
