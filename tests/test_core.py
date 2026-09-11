@@ -160,7 +160,7 @@ def test_edit_product_updates_all_data_and_regenerates_code(app):
 
     response=client.post(f"/admin/estoque/produto/{old_code}/editar",data={
         "name":"Perfil Guia 48 mm", "category_id":str(category_id), "unit_id":str(unit_id),
-        "minimum_stock":"3,5", "maximum_stock":"50", "sale_price":"19,90",
+        "current_quantity":"25", "minimum_stock":"3,5", "maximum_stock":"50", "sale_price":"19,90",
         "piece_length":"3", "piece_width":"0,048", "piece_height":"0,01",
         "location":"Prateleira A", "description":"Perfil metálico", "active":"1",
     })
@@ -172,7 +172,8 @@ def test_edit_product_updates_all_data_and_regenerates_code(app):
         assert updated.internal_code.startswith("CAN-PERGUI-300X4-")
         assert updated.estimated_price == Decimal("19.90")
         assert updated.minimum_stock == Decimal("3.500")
-        assert updated.current_quantity == Decimal("10.500")
+        assert updated.current_quantity == Decimal("25.000")
+        assert StockMovement.query.filter_by(product_id=updated.id, movement_type="Ajuste positivo").count() == 1
 
 def test_delete_product_removes_balance_and_history(app):
     with app.app_context():

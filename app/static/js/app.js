@@ -24,6 +24,22 @@ monetaryFields.forEach(name=>document.querySelectorAll(`input[name="${name}"]`).
     input.parentNode.insertBefore(wrapper,input);
     wrapper.append(prefix,input);
 }));
+const formatStoredQuantity=value=>{
+    const number=Number(value);
+    return Number.isFinite(number)?number.toLocaleString('pt-BR',{maximumFractionDigits:3}):value;
+};
+document.querySelectorAll('select option').forEach(option=>{
+    option.textContent=option.textContent.replace(/(\(|disponível\s+|saldo\s+)(-?\d+(?:\.\d+)?)/gi,(text,prefix,value)=>prefix+formatStoredQuantity(value));
+});
+document.querySelectorAll('.record-card small').forEach(element=>{
+    element.textContent=element.textContent.replace(/(—\s+)(-?\d+(?:\.\d+)?)/,(text,prefix,value)=>prefix+formatStoredQuantity(value));
+});
+document.querySelectorAll('.activity > strong').forEach(element=>{
+    element.textContent=element.textContent.replace(/^-?\d+(?:\.\d+)?/,value=>formatStoredQuantity(value));
+});
+document.querySelectorAll('.alert-row small').forEach(element=>{
+    element.textContent=element.textContent.replace(/(Saldo\s+|mínimo\s+)(-?\d+(?:\.\d+)?)/gi,(text,prefix,value)=>prefix+formatStoredQuantity(value));
+});
 
 const addFieldHint=(field,text)=>{
     const container=field?.matches?.('label')?field:(field?.closest?.('label')||field?.parentElement);
@@ -97,6 +113,7 @@ if(location.pathname.endsWith('/estoque')){
         actions.append(edit,remove);cell.appendChild(actions);row.appendChild(cell);
     });
     const headerRow=document.querySelector('.table-wrap thead tr');if(headerRow){const header=document.createElement('th');header.textContent='Ações';headerRow.appendChild(header);}
+    document.querySelectorAll('.table-wrap tbody td:nth-child(5) strong').forEach(element=>{element.textContent=formatStoredQuantity(element.textContent.trim());});
 }
 if(location.pathname.includes('/compras/')&&location.pathname.endsWith('/editar')){
     addFieldHint(document.querySelector('[name="quantity"]')?.closest('label'),'Se alterar a quantidade, a diferença será somada ou retirada do estoque.');
@@ -105,4 +122,5 @@ if(location.pathname.includes('/compras/')&&location.pathname.endsWith('/editar'
 if(location.pathname.includes('/estoque/produto/')&&location.pathname.endsWith('/editar')){
     addFieldHint(document.querySelector('[name="name"]')?.closest('label'),'O código automático será recriado com base neste nome, na categoria e nas medidas.');
     addFieldHint(document.querySelector('[name="minimum_stock"]')?.closest('label'),'Ao chegar nesta quantidade, o sistema mostrará o aviso “Estoque baixo”.');
+    addFieldHint(document.querySelector('[name="current_quantity"]')?.closest('label'),'Digite o saldo real: 12 para doze ou 12.000 para doze mil.');
 }

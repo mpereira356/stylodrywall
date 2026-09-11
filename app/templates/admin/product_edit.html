@@ -8,7 +8,7 @@
   </div>
 </div>
 <div class="panel product-edit-panel">
-  <div class="screen-guide"><b>Quantidade atual: {{product.current_quantity|br_number}} {{product.unit.code}}</b><span>Para corrigir essa quantidade, use “Nova movimentação”. Assim o histórico do estoque permanece correto.</span></div>
+  <div class="screen-guide"><b>Quantidade atual: {{product.current_quantity|br_number}} {{product.unit.code}}</b><span>Você pode corrigir o saldo abaixo. O sistema registrará automaticamente essa alteração no histórico.</span></div>
   <form method="post">
     <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
     <div class="form-section"><h2>Identificação</h2><div class="form-grid">
@@ -20,6 +20,7 @@
       <label>Código de barras (opcional)<input class="input" name="barcode" value="{{product.barcode or ''}}"></label>
     </div><label>Descrição<input class="input" name="description" value="{{product.description or ''}}"></label></div>
     <div class="form-section"><h2>Estoque e venda</h2><div class="form-grid">
+      <label>Quantidade atual<input class="input" name="current_quantity" inputmode="decimal" value="{{product.current_quantity|br_number}}" required></label>
       <label>Estoque mínimo<input class="input" name="minimum_stock" inputmode="decimal" value="{{product.minimum_stock|br_number}}"></label>
       <label>Estoque máximo (opcional)<input class="input" name="maximum_stock" inputmode="decimal" value="{{product.maximum_stock|br_number if product.maximum_stock is not none else ''}}"></label>
       <label>Preço de venda<input class="input" name="sale_price" inputmode="decimal" value="{{product.estimated_price|br_money if product.estimated_price is not none else ''}}"></label>

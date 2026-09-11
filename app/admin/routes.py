@@ -76,6 +76,11 @@ def edit_product(internal_code):
             category = db.get_or_404(Category, int(request.form["category_id"]))
             unit = db.get_or_404(Unit, int(request.form["unit_id"]))
             supplier_id = request.form.get("supplier_id")
+            current_quantity = (decimal_field("current_quantity")
+                                if request.form.get("current_quantity") is not None
+                                else Decimal(product.current_quantity or 0))
+            if current_quantity < 0:
+                raise ValueError("A quantidade atual não pode ser negativa.")
             length = decimal_field("piece_length") or None
             width = decimal_field("piece_width") or None
             old = {"nome": product.name, "codigo": product.internal_code}
@@ -97,6 +102,10 @@ def edit_product(internal_code):
             product.location = request.form.get("location") or None
             product.notes = request.form.get("notes") or None
             product.active = request.form.get("active") == "1"
+            stock_difference = current_quantity - Decimal(product.current_quantity or 0)
+            if stock_difference:
+                move_stock(product, "Ajuste positivo" if stock_difference > 0 else "Ajuste negativo",
+                           abs(stock_difference), current_user, notes="Correção feita na edição do produto")
             audit("Produto editado", "estoque", product.id, current_user, old=old,
                   new={"nome": product.name, "codigo": product.internal_code}, ip=request.remote_addr)
             db.session.commit()
@@ -202,6 +211,7 @@ def quote_request_status(request_id):
 def decimal_field(name, default="0"):
     field_labels = {
         "quantity": "Quantidade",
+        "current_quantity": "Quantidade atual",
         "unit_cost": "Custo por unidade",
         "sale_price": "Preço de venda",
         "minimum_stock": "Estoque mínimo",
