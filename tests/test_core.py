@@ -112,6 +112,10 @@ def test_edit_and_delete_purchase_adjust_stock_and_financial(app):
         session["_user_id"] = str(user_id)
         session["_fresh"] = True
 
+    edit_page=client.get(f"/admin/compras/{purchase_id}/editar").get_data(as_text=True)
+    assert 'name="quantity" inputmode="decimal" value="5"' in edit_page
+    assert 'name="unit_cost" inputmode="decimal" value="10,00"' in edit_page
+
     response=client.post(f"/admin/compras/{purchase_id}/editar",data={
         "quantity":"7", "unit_cost":"12", "purchase_date":"2026-09-11",
         "document":"NF-10", "notes":"Compra corrigida",

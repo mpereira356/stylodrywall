@@ -1,5 +1,6 @@
 import os
 import click
+from decimal import Decimal, InvalidOperation
 from flask import Flask
 from werkzeug.security import generate_password_hash
 from .config import Config
@@ -19,6 +20,19 @@ def create_app(config_object=Config):
     from .auth.routes import bp as auth_bp
     from .admin.routes import bp as admin_bp
     app.register_blueprint(public_bp); app.register_blueprint(auth_bp); app.register_blueprint(admin_bp)
+    @app.template_filter("br_number")
+    def br_number(value, places=3):
+        try:
+            text = f"{Decimal(value or 0):.{places}f}".rstrip("0").rstrip(".")
+            return text.replace(".", ",")
+        except (InvalidOperation, ValueError, TypeError):
+            return value
+    @app.template_filter("br_money")
+    def br_money(value):
+        try:
+            return f"{Decimal(value or 0):.2f}".replace(".", ",")
+        except (InvalidOperation, ValueError, TypeError):
+            return value
     @app.after_request
     def security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
