@@ -1,9 +1,10 @@
 from decimal import Decimal
+from datetime import date
 import pytest
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
-from app.models import Role, User, Unit, Category, Product, Purchase
+from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry
 from app.services import move_stock
 
 @pytest.fixture()
@@ -96,3 +97,62 @@ def test_purchase_rejects_duplicate_product_name(app):
     with app.app_context():
         assert Product.query.count() == 1
         assert Purchase.query.count() == 0
+
+def test_edit_and_delete_purchase_adjust_stock_and_financial(app):
+    with app.app_context():
+        item, user = product()
+        purchase = Purchase(purchase_date=date(2026, 9, 10), total=Decimal("50"), user=user)
+        line = PurchaseItem(purchase=purchase, product=item, quantity=Decimal("5"), unit_cost=Decimal("10"), total=Decimal("50"))
+        entry = FinancialEntry(kind="DESPESA", description="Compra #1 - Compra sem fornecedor", category="Compra de material", amount=Decimal("50"), paid_amount=Decimal("50"), status="Pago")
+        db.session.add_all([purchase, line, entry]); db.session.commit()
+        purchase_id, user_id = purchase.id, user.id
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+    response=client.post(f"/admin/compras/{purchase_id}/editar",data={
+        "quantity":"7", "unit_cost":"12", "purchase_date":"2026-09-11",
+        "document":"NF-10", "notes":"Compra corrigida",
+    })
+    assert response.status_code == 302
+    with app.app_context():
+        purchase = db.session.get(Purchase, purchase_id)
+        assert purchase.total == Decimal("84.00")
+        assert purchase.items[0].product.current_quantity == Decimal("12.500")
+        purchase_financial = FinancialEntry.query.filter(FinancialEntry.description.like(f"Compra #{purchase_id} -%" )).one()
+        assert purchase_financial.amount == Decimal("84.00")
+
+    response=client.post(f"/admin/compras/{purchase_id}/remover")
+    assert response.status_code == 302
+    with app.app_context():
+        assert db.session.get(Purchase, purchase_id) is None
+        assert Product.query.one().current_quantity == Decimal("5.500")
+        assert FinancialEntry.query.filter(FinancialEntry.description.like(f"Compra #{purchase_id} -%" )).count() == 0
+
+def test_edit_product_updates_all_data_and_regenerates_code(app):
+    with app.app_context():
+        item, user = product()
+        old_code, user_id, unit_id, category_id = item.internal_code, user.id, item.unit_id, item.category_id
+
+    client=app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+    response=client.post(f"/admin/estoque/produto/{old_code}/editar",data={
+        "name":"Perfil Guia 48 mm", "category_id":str(category_id), "unit_id":str(unit_id),
+        "minimum_stock":"3,5", "maximum_stock":"50", "sale_price":"19,90",
+        "piece_length":"3", "piece_width":"0,048", "piece_height":"0,01",
+        "location":"Prateleira A", "description":"Perfil metálico", "active":"1",
+    })
+    assert response.status_code == 302
+    with app.app_context():
+        updated = Product.query.one()
+        assert updated.name == "Perfil Guia 48 mm"
+        assert updated.internal_code != old_code
+        assert updated.internal_code.startswith("CAN-PERGUI-300X4-")
+        assert updated.estimated_price == Decimal("19.90")
+        assert updated.minimum_stock == Decimal("3.500")
+        assert updated.current_quantity == Decimal("10.500")

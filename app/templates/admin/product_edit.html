@@ -1,0 +1,39 @@
+{% extends 'admin/base.html' %}
+{% block admin %}
+<div class="page-heading">
+  <div>
+    <a class="detail-back" href="{{url_for('admin.inventory')}}"><i class="bi bi-arrow-left"></i> Voltar para o estoque</a>
+    <h1>Editar produto</h1>
+    <p>Altere os dados abaixo. O código será atualizado automaticamente ao salvar.</p>
+  </div>
+</div>
+<div class="panel product-edit-panel">
+  <div class="screen-guide"><b>Quantidade atual: {{product.current_quantity}} {{product.unit.code}}</b><span>Para corrigir essa quantidade, use “Nova movimentação”. Assim o histórico do estoque permanece correto.</span></div>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+    <div class="form-section"><h2>Identificação</h2><div class="form-grid">
+      <label>Código automático<input class="input auto-code" value="{{product.internal_code}}" readonly></label>
+      <label>Nome do produto<input class="input" name="name" value="{{product.name}}" required></label>
+      <label>Categoria<select class="input" name="category_id" required>{% for x in categories %}<option value="{{x.id}}" {% if x.id==product.category_id %}selected{% endif %}>{{x.name}}</option>{% endfor %}</select></label>
+      <label>Controlado por<select class="input" name="unit_id" required>{% for x in units %}<option value="{{x.id}}" {% if x.id==product.unit_id %}selected{% endif %}>{{x.code}} — {{x.name}}</option>{% endfor %}</select></label>
+      <label>SKU (opcional)<input class="input" name="sku" value="{{product.sku or ''}}"></label>
+      <label>Código de barras (opcional)<input class="input" name="barcode" value="{{product.barcode or ''}}"></label>
+    </div><label>Descrição<input class="input" name="description" value="{{product.description or ''}}"></label></div>
+    <div class="form-section"><h2>Estoque e venda</h2><div class="form-grid">
+      <label>Estoque mínimo<input class="input" name="minimum_stock" inputmode="decimal" value="{{product.minimum_stock or 0}}"></label>
+      <label>Estoque máximo (opcional)<input class="input" name="maximum_stock" inputmode="decimal" value="{{product.maximum_stock or ''}}"></label>
+      <label>Preço de venda<input class="input" name="sale_price" inputmode="decimal" value="{{product.estimated_price or ''}}"></label>
+      <label>Localização no estoque<input class="input" name="location" value="{{product.location or ''}}" placeholder="Ex.: Prateleira A"></label>
+      <label>Fornecedor principal<select class="input" name="supplier_id"><option value="">Nenhum fornecedor</option>{% for x in suppliers %}<option value="{{x.id}}" {% if x.id==product.supplier_id %}selected{% endif %}>{{x.company_name}}</option>{% endfor %}</select></label>
+      <label>Situação<select class="input" name="active"><option value="1" {% if product.active %}selected{% endif %}>Ativo — aparece nas listas</option><option value="0" {% if not product.active %}selected{% endif %}>Inativo — fica oculto nas listas</option></select></label>
+    </div></div>
+    <div class="form-section"><h2>Medidas da peça (opcionais)</h2><p class="hint">Preencha somente quando o produto possuir medidas definidas.</p><div class="form-grid">
+      <label>Comprimento (m)<input class="input" name="piece_length" inputmode="decimal" value="{{product.piece_length or ''}}"></label>
+      <label>Largura (m)<input class="input" name="piece_width" inputmode="decimal" value="{{product.piece_width or ''}}"></label>
+      <label>Espessura / altura (m)<input class="input" name="piece_height" inputmode="decimal" value="{{product.piece_height or ''}}"></label>
+    </div></div>
+    <label>Observações<input class="input" name="notes" value="{{product.notes or ''}}"></label>
+    <button class="btn gold wide">Salvar alterações do produto</button>
+  </form>
+</div>
+{% endblock %}

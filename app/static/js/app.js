@@ -64,6 +64,15 @@ if(location.pathname.endsWith('/compras')){
     const newTitle=newPurchaseProduct?.querySelector('b');if(newTitle)newTitle.textContent='Dados do novo produto';
     addFieldHint(form?.querySelector('[name="quantity"]')?.closest('label'),'Informe quanto entrou no estoque. Ex.: 10 unidades ou 3,5 metros.');
     addFieldHint(form?.querySelector('[name="unit_cost"]')?.closest('label'),'Digite quanto foi pago por uma unidade ou medida, sem digitar R$.');
+    const csrf=form?.querySelector('[name="csrf_token"]')?.value||'';
+    document.querySelectorAll('.record-card').forEach(card=>{
+        const match=card.querySelector('b')?.textContent.match(/Compra #(\d+)/);if(!match)return;
+        const id=match[1],actions=document.createElement('div');actions.className='record-actions';
+        const edit=document.createElement('a');edit.className='btn small-btn';edit.href=`/admin/compras/${id}/editar`;edit.innerHTML='<i class="bi bi-pencil"></i> Editar';
+        const remove=document.createElement('form');remove.method='post';remove.action=`/admin/compras/${id}/remover`;remove.innerHTML=`<input type="hidden" name="csrf_token" value="${csrf}"><button type="submit" class="btn small-btn danger-btn"><i class="bi bi-trash"></i> Remover</button>`;
+        remove.addEventListener('submit',event=>{if(!confirm('Remover esta compra? A quantidade será retirada do estoque e a despesa também será removida do financeiro.'))event.preventDefault();});
+        actions.append(edit,remove);card.appendChild(actions);
+    });
 }
 if(location.pathname.endsWith('/vendas')){
     const product=document.getElementById('sale-product');
@@ -77,4 +86,19 @@ if(location.pathname.endsWith('/vendas')){
 if(location.pathname.endsWith('/estoque')){
     const panel=document.querySelector('.admin-content .panel');
     if(panel){const guide=document.createElement('div');guide.className='screen-guide';guide.innerHTML='<b>Como entender esta tela</b><span>A quantidade mostra o saldo disponível. “Estoque baixo” avisa que o produto chegou ao mínimo definido.</span>';panel.prepend(guide);}
+    document.querySelectorAll('.table-wrap tbody tr').forEach(row=>{
+        const code=row.querySelector('code')?.textContent.trim();if(!code)return;
+        const cell=document.createElement('td'),edit=document.createElement('a');
+        edit.className='btn small-btn';edit.href=`/admin/estoque/produto/${encodeURIComponent(code)}/editar`;edit.innerHTML='<i class="bi bi-pencil"></i> Editar produto';
+        cell.appendChild(edit);row.appendChild(cell);
+    });
+    const headerRow=document.querySelector('.table-wrap thead tr');if(headerRow){const header=document.createElement('th');header.textContent='Ações';headerRow.appendChild(header);}
+}
+if(location.pathname.includes('/compras/')&&location.pathname.endsWith('/editar')){
+    addFieldHint(document.querySelector('[name="quantity"]')?.closest('label'),'Se alterar a quantidade, a diferença será somada ou retirada do estoque.');
+    addFieldHint(document.querySelector('[name="unit_cost"]')?.closest('label'),'O total da compra e a despesa financeira serão recalculados.');
+}
+if(location.pathname.includes('/estoque/produto/')&&location.pathname.endsWith('/editar')){
+    addFieldHint(document.querySelector('[name="name"]')?.closest('label'),'O código automático será recriado com base neste nome, na categoria e nas medidas.');
+    addFieldHint(document.querySelector('[name="minimum_stock"]')?.closest('label'),'Ao chegar nesta quantidade, o sistema mostrará o aviso “Estoque baixo”.');
 }

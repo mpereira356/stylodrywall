@@ -64,6 +64,51 @@ def low_stock():
     products = [p for p in Product.query.filter_by(active=True).all() if p.low_stock]
     return render_template("admin/inventory.html", products=products, q="")
 
+@bp.route("/estoque/produto/<string:internal_code>/editar", methods=["GET", "POST"])
+def edit_product(internal_code):
+    product = Product.query.filter_by(internal_code=internal_code).first_or_404()
+    if request.method == "POST":
+        try:
+            name = " ".join(request.form.get("name", "").split())
+            if not name: raise ValueError("Informe o nome do produto.")
+            if product_name_exists(name, exclude_id=product.id):
+                raise ValueError("Já existe outro produto cadastrado com esse nome.")
+            category = db.get_or_404(Category, int(request.form["category_id"]))
+            unit = db.get_or_404(Unit, int(request.form["unit_id"]))
+            supplier_id = request.form.get("supplier_id")
+            length = decimal_field("piece_length") or None
+            width = decimal_field("piece_width") or None
+            old = {"nome": product.name, "codigo": product.internal_code}
+            product.name = name
+            product.internal_code = generate_product_code(name, category, length, width)
+            product.description = request.form.get("description")
+            product.category = category
+            product.unit = unit
+            product.supplier = db.session.get(Supplier, int(supplier_id)) if supplier_id else None
+            product.sku = request.form.get("sku") or None
+            product.barcode = request.form.get("barcode") or None
+            product.minimum_stock = decimal_field("minimum_stock")
+            product.maximum_stock = decimal_field("maximum_stock") or None
+            product.piece_length = length
+            product.piece_width = width
+            product.piece_height = decimal_field("piece_height") or None
+            product.coverage_area = length * width if length and width else None
+            product.estimated_price = decimal_field("sale_price") or None
+            product.location = request.form.get("location") or None
+            product.notes = request.form.get("notes") or None
+            product.active = request.form.get("active") == "1"
+            audit("Produto editado", "estoque", product.id, current_user, old=old,
+                  new={"nome": product.name, "codigo": product.internal_code}, ip=request.remote_addr)
+            db.session.commit()
+            flash(f"Produto atualizado. O código foi ajustado automaticamente para {product.internal_code}.", "success")
+            return redirect(url_for("admin.inventory"))
+        except (ValueError, KeyError) as error:
+            db.session.rollback(); flash(str(error), "danger")
+    return render_template("admin/product_edit.html", product=product,
+                           units=Unit.query.filter_by(active=True).all(),
+                           categories=Category.query.order_by(Category.name).all(),
+                           suppliers=Supplier.query.filter_by(active=True).order_by(Supplier.company_name).all())
+
 @bp.route("/movimentacoes", methods=["GET", "POST"])
 def movements():
     form = MovementForm()
@@ -122,6 +167,7 @@ def decimal_field(name, default="0"):
         "unit_cost": "Custo por unidade",
         "sale_price": "Preço de venda",
         "minimum_stock": "Estoque mínimo",
+        "maximum_stock": "Estoque máximo",
         "piece_length": "Comprimento da peça",
         "piece_width": "Largura da peça",
         "piece_height": "Espessura da peça",
@@ -158,10 +204,12 @@ def generate_product_code(name, category, length=None, width=None):
         sequence += 1; code = f"{prefix}-{sequence:03d}"
     return code
 
-def product_name_exists(name):
+def product_name_exists(name, exclude_id=None):
     normalized = " ".join(name.split()).casefold()
+    query = db.session.query(Product.id, Product.name)
+    if exclude_id is not None: query = query.filter(Product.id != exclude_id)
     return any(" ".join(product_name.split()).casefold() == normalized
-               for product_name, in db.session.query(Product.name).all())
+               for _, product_name in query.all())
 
 @bp.route("/fornecedores", methods=["GET", "POST"])
 def suppliers():
@@ -226,6 +274,78 @@ def purchases():
         except (ValueError, KeyError) as error:
             db.session.rollback(); flash(str(error), "danger")
     return render_template("admin/purchases.html", purchases=Purchase.query.order_by(Purchase.created_at.desc()).all(), suppliers=Supplier.query.filter_by(active=True).all(), products=Product.query.filter_by(active=True).all(), units=Unit.query.filter_by(active=True).all(), categories=Category.query.order_by(Category.name).all(), today=date.today().isoformat())
+
+def purchase_financial_entry(purchase_id):
+    return FinancialEntry.query.filter(
+        FinancialEntry.kind == "DESPESA",
+        FinancialEntry.description.like(f"Compra #{purchase_id} -%"),
+    ).order_by(FinancialEntry.id.desc()).first()
+
+@bp.route("/compras/<int:purchase_id>/editar", methods=["GET", "POST"])
+def edit_purchase(purchase_id):
+    purchase = db.get_or_404(Purchase, purchase_id)
+    if not purchase.items:
+        flash("Esta compra não possui um item para editar.", "danger")
+        return redirect(url_for("admin.purchases"))
+    item = purchase.items[0]
+    if request.method == "POST":
+        try:
+            quantity = decimal_field("quantity")
+            cost = decimal_field("unit_cost")
+            if quantity <= 0 or cost < 0:
+                raise ValueError("A quantidade deve ser maior que zero e o custo não pode ser negativo.")
+            old_quantity, old_cost = Decimal(item.quantity), Decimal(item.unit_cost)
+            difference = quantity - old_quantity
+            if difference:
+                movement_type = "Ajuste positivo" if difference > 0 else "Ajuste negativo"
+                move_stock(item.product, movement_type, abs(difference), current_user, cost,
+                           supplier=purchase.supplier, notes=f"Edição da compra #{purchase.id}",
+                           document=request.form.get("document"))
+            supplier_id = request.form.get("supplier_id")
+            purchase.supplier = db.session.get(Supplier, int(supplier_id)) if supplier_id else None
+            purchase.purchase_date = date.fromisoformat(request.form.get("purchase_date") or date.today().isoformat())
+            purchase.document = request.form.get("document")
+            purchase.notes = request.form.get("notes")
+            purchase.total = quantity * cost
+            item.quantity, item.unit_cost, item.total = quantity, cost, purchase.total
+            item.product.last_cost = cost
+            entry = purchase_financial_entry(purchase.id)
+            supplier_name = purchase.supplier.company_name if purchase.supplier else "Compra sem fornecedor"
+            if entry:
+                entry.description = f"Compra #{purchase.id} - {supplier_name}"
+                entry.amount = entry.paid_amount = purchase.total
+                entry.paid_at = entry.due_date = purchase.purchase_date
+                entry.supplier_id = purchase.supplier_id
+            audit("Compra editada", "compras", purchase.id, current_user,
+                  old={"quantidade": str(old_quantity), "custo": str(old_cost)},
+                  new={"quantidade": str(quantity), "custo": str(cost)}, ip=request.remote_addr)
+            db.session.commit()
+            flash("Compra atualizada. O estoque e o financeiro também foram ajustados.", "success")
+            return redirect(url_for("admin.purchases"))
+        except (ValueError, KeyError) as error:
+            db.session.rollback(); flash(str(error), "danger")
+    return render_template("admin/purchase_edit.html", purchase=purchase, item=item,
+                           suppliers=Supplier.query.filter_by(active=True).all())
+
+@bp.post("/compras/<int:purchase_id>/remover")
+def delete_purchase(purchase_id):
+    purchase = db.get_or_404(Purchase, purchase_id)
+    try:
+        for item in purchase.items:
+            move_stock(item.product, "Saída", item.quantity, current_user, item.unit_cost,
+                       supplier=purchase.supplier, notes=f"Remoção da compra #{purchase.id}",
+                       document=purchase.document)
+        entry = purchase_financial_entry(purchase.id)
+        old = {"total": str(purchase.total), "itens": len(purchase.items)}
+        if entry: db.session.delete(entry)
+        db.session.delete(purchase)
+        audit("Compra removida", "compras", purchase_id, current_user, old=old, ip=request.remote_addr)
+        db.session.commit()
+        flash("Compra removida. A quantidade foi retirada do estoque e a despesa foi removida do financeiro.", "success")
+    except ValueError:
+        db.session.rollback()
+        flash("Não foi possível remover: parte desse material já saiu do estoque. Ajuste o estoque antes de remover a compra.", "danger")
+    return redirect(url_for("admin.purchases"))
 
 @bp.route("/vendas", methods=["GET", "POST"])
 def sales():

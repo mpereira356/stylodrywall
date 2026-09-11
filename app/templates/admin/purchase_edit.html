@@ -1,0 +1,25 @@
+{% extends 'admin/base.html' %}
+{% block admin %}
+<div class="page-heading">
+  <div>
+    <a class="detail-back" href="{{url_for('admin.purchases')}}"><i class="bi bi-arrow-left"></i> Voltar para compras</a>
+    <h1>Editar compra #{{purchase.id}}</h1>
+    <p>Ao salvar, o sistema ajustará automaticamente o estoque e o financeiro.</p>
+  </div>
+</div>
+<div class="panel edit-purchase-panel">
+  <div class="screen-guide"><b>Produto</b><span>{{item.product.name}} — este produto não pode ser trocado. Para outro produto, registre uma nova compra.</span></div>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{csrf_token()}}">
+    <div class="form-grid">
+      <label>Fornecedor (opcional)<select class="input" name="supplier_id"><option value="">Compra sem fornecedor</option>{% for x in suppliers %}<option value="{{x.id}}" {% if purchase.supplier_id==x.id %}selected{% endif %}>{{x.company_name}}</option>{% endfor %}</select></label>
+      <label>Data da compra<input class="input" type="date" name="purchase_date" value="{{purchase.purchase_date.isoformat()}}" required></label>
+      <label>Quantidade comprada<input class="input" name="quantity" inputmode="decimal" value="{{item.quantity}}" required></label>
+      <label>Custo por unidade/medida<input class="input" name="unit_cost" inputmode="decimal" value="{{item.unit_cost}}" required></label>
+      <label>Documento / nota fiscal<input class="input" name="document" value="{{purchase.document or ''}}"></label>
+      <label>Observações<input class="input" name="notes" value="{{purchase.notes or ''}}"></label>
+    </div>
+    <button class="btn gold wide">Salvar e ajustar estoque</button>
+  </form>
+</div>
+{% endblock %}
