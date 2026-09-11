@@ -6,6 +6,7 @@ from app.config import TestConfig
 from app.extensions import db
 from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry, StockMovement
 from app.services import move_stock
+from app.admin.routes import decimal_field
 
 @pytest.fixture()
 def app():
@@ -35,6 +36,17 @@ def test_negative_stock_is_blocked(app):
     with app.app_context():
         item,user=product()
         with pytest.raises(ValueError): move_stock(item,"Saída",Decimal("99"),user)
+
+def test_brazilian_number_format_distinguishes_decimal_and_thousands(app):
+    with app.test_request_context(method="POST", data={
+        "integer":"12", "decimal":"12,5", "thousands":"12.000",
+        "millions":"1.234.567", "money":"1.234,56",
+    }):
+        assert decimal_field("integer") == Decimal("12")
+        assert decimal_field("decimal") == Decimal("12.5")
+        assert decimal_field("thousands") == Decimal("12000")
+        assert decimal_field("millions") == Decimal("1234567")
+        assert decimal_field("money") == Decimal("1234.56")
 
 def test_purchase_accepts_blank_optional_dimensions(app):
     with app.app_context():

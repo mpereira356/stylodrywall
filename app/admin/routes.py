@@ -215,7 +215,12 @@ def decimal_field(name, default="0"):
     if value is None or not value.strip():
         value = default
     try:
-        return Decimal(str(value).strip().replace(",", "."))
+        text = str(value).strip().replace(" ", "")
+        if "," in text:
+            text = text.replace(".", "").replace(",", ".")
+        elif re.fullmatch(r"[+-]?\d{1,3}(?:\.\d{3})+", text):
+            text = text.replace(".", "")
+        return Decimal(text)
     except (InvalidOperation, AttributeError):
         label = field_labels.get(name, name)
         raise ValueError(f"Confira o campo “{label}”. Digite somente números, por exemplo: 10,50.")
