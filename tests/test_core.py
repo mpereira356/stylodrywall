@@ -158,9 +158,11 @@ def test_edit_product_updates_all_data_and_regenerates_code(app):
         assert updated.minimum_stock == Decimal("3.500")
         assert updated.current_quantity == Decimal("10.500")
 
-def test_delete_product_requires_zero_balance_and_no_history(app):
+def test_delete_product_removes_balance_and_history(app):
     with app.app_context():
         item, user = product()
+        move_stock(item, "Entrada", Decimal("2"), user, Decimal("5"), notes="Entrada de teste")
+        db.session.commit()
         code, product_id, user_id = item.internal_code, item.id, user.id
 
     client=app.test_client()
@@ -169,14 +171,7 @@ def test_delete_product_requires_zero_balance_and_no_history(app):
         session["_fresh"] = True
 
     response=client.post(f"/admin/estoque/produto/{code}/remover",follow_redirects=True)
-    assert "não pode ser excluído porque possui saldo ou histórico" in response.get_data(as_text=True)
-    with app.app_context():
-        item = db.session.get(Product, product_id)
-        assert item is not None
-        item.current_quantity = 0
-        db.session.commit()
-
-    response=client.post(f"/admin/estoque/produto/{code}/remover",follow_redirects=True)
-    assert "Produto excluído definitivamente" in response.get_data(as_text=True)
+    assert "todos os registros relacionados foram excluídos" in response.get_data(as_text=True)
     with app.app_context():
         assert db.session.get(Product, product_id) is None
+        assert StockMovement.query.filter_by(product_id=product_id).count() == 0

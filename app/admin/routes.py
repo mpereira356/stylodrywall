@@ -112,21 +112,39 @@ def edit_product(internal_code):
 @bp.post("/estoque/produto/<string:internal_code>/remover")
 def delete_product(internal_code):
     product = Product.query.filter_by(internal_code=internal_code).first_or_404()
-    has_history = any((
-        StockMovement.query.filter_by(product_id=product.id).first(),
-        PurchaseItem.query.filter_by(product_id=product.id).first(),
-        SaleItem.query.filter_by(product_id=product.id).first(),
-        ProjectMaterial.query.filter_by(product_id=product.id).first(),
-    ))
-    if Decimal(product.current_quantity or 0) != 0 or has_history:
-        flash("Este produto não pode ser excluído porque possui saldo ou histórico. Abra “Editar produto” e marque-o como inativo para ocultá-lo das listas.", "danger")
-        return redirect(url_for("admin.inventory"))
     old = {"nome": product.name, "codigo": product.internal_code}
     product_id = product.id
+    for item in PurchaseItem.query.filter_by(product_id=product.id).all():
+        purchase = item.purchase
+        entry = purchase_financial_entry(purchase.id)
+        if len(purchase.items) == 1:
+            if entry: db.session.delete(entry)
+            db.session.delete(purchase)
+        else:
+            purchase.total = Decimal(purchase.total or 0) - Decimal(item.total or 0)
+            if entry: entry.amount = entry.paid_amount = purchase.total
+            db.session.delete(item)
+    for item in SaleItem.query.filter_by(product_id=product.id).all():
+        sale = item.sale
+        entry = FinancialEntry.query.filter(
+            FinancialEntry.kind == "RECEITA",
+            FinancialEntry.description.like(f"Venda #{sale.id} -%"),
+        ).order_by(FinancialEntry.id.desc()).first()
+        if len(sale.items) == 1:
+            if entry: db.session.delete(entry)
+            db.session.delete(sale)
+        else:
+            sale.total = Decimal(sale.total or 0) - Decimal(item.total or 0)
+            if entry:
+                entry.amount = sale.total
+                entry.paid_amount = sale.total if sale.status == "Pago" else 0
+            db.session.delete(item)
+    ProjectMaterial.query.filter_by(product_id=product.id).delete(synchronize_session=False)
+    StockMovement.query.filter_by(product_id=product.id).delete(synchronize_session=False)
     db.session.delete(product)
     audit("Produto excluído", "estoque", product_id, current_user, old=old, ip=request.remote_addr)
     db.session.commit()
-    flash("Produto excluído definitivamente.", "success")
+    flash("Produto e todos os registros relacionados foram excluídos definitivamente.", "success")
     return redirect(url_for("admin.inventory"))
 
 @bp.route("/movimentacoes", methods=["GET", "POST"])

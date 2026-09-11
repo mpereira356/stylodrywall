@@ -93,7 +93,7 @@ if(location.pathname.endsWith('/estoque')){
         const remove=document.createElement('form');remove.method='post';remove.action=`/admin/estoque/produto/${encodeURIComponent(code)}/remover`;
         const csrf=document.querySelector('input[name="csrf_token"]')?.value||'';
         remove.innerHTML=`<input type="hidden" name="csrf_token" value="${csrf}"><button type="submit" class="btn small-btn danger-btn"><i class="bi bi-trash"></i> Excluir</button>`;
-        remove.addEventListener('submit',event=>{const name=row.querySelector('td:nth-child(2)')?.textContent.trim();if(!confirm(`Excluir definitivamente o produto “${name}”? Esta ação não poderá ser desfeita.`))event.preventDefault();});
+        remove.addEventListener('submit',event=>{const name=row.querySelector('td:nth-child(2)')?.textContent.trim();if(!confirm(`Excluir definitivamente “${name}”? O saldo, as movimentações e os registros relacionados também serão apagados. Esta ação não poderá ser desfeita.`))event.preventDefault();});
         actions.append(edit,remove);cell.appendChild(actions);row.appendChild(cell);
     });
     const headerRow=document.querySelector('.table-wrap thead tr');if(headerRow){const header=document.createElement('th');header.textContent='Ações';headerRow.appendChild(header);}
