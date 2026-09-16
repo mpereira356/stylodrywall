@@ -6,7 +6,7 @@
     <a class="public-logo" href="#inicio"><img src="{{url_for('static',filename='img/logo.png')}}" alt="Stylo Drywall"><span>STYLO<small>DRYWALL</small></span></a>
     <button class="nav-toggle" aria-label="Abrir menu"><i class="bi bi-list"></i></button>
     <nav>
-      <a class="active" href="#inicio">Início</a><a href="#sobre">Sobre</a><a href="#servicos">Serviços</a><a href="#projetos">Projetos</a><a href="#diferenciais">Depoimentos</a><a href="#contato">Contato</a>{% if apk_available %}<a href="{{url_for('public.download_app')}}"><i class="bi bi-android2"></i> Baixar aplicativo</a>{% endif %}
+      <a class="active" href="#inicio">Início</a><a href="#sobre">Sobre</a><a href="#servicos">Serviços</a><a href="#projetos">Projetos</a><a href="#diferenciais">Depoimentos</a><a href="#contato">Contato</a>
     </nav>
     <a class="quote-button" href="{{url_for('public.quote_request')}}"><i class="bi bi-whatsapp"></i> Solicitar orçamento</a>
   </div>

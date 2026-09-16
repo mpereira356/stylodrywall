@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from datetime import date, datetime, timezone
 from io import BytesIO
+from pathlib import Path
 import calendar
 import math
 import os
@@ -9,7 +10,7 @@ import sqlite3
 import tempfile
 import unicodedata
 from math import ceil
-from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file, after_this_request
+from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file, send_from_directory, after_this_request
 from flask_login import login_required, current_user
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -60,6 +61,10 @@ def dashboard():
     lows = [p for p in products if p.low_stock]
     chart_data = {"labels": labels, "revenue": revenue_data, "expenses": expense_data, "stock_in": stock_in_data, "stock_out": stock_out_data}
     return render_template("admin/dashboard.html", metrics=metrics, recent=recent, movements=recent, low_products=lows, low_stock=lows, chart_data=chart_data)
+
+@bp.get("/baixar-aplicativo")
+def download_app():
+    return send_from_directory(Path(current_app.static_folder) / "downloads", "stylo-gestao.apk", as_attachment=True, download_name="stylo-gestao.apk")
 
 @bp.route("/estoque")
 def inventory():

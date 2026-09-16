@@ -24,12 +24,8 @@ def test_public_and_admin_protection(app):
     client=app.test_client()
     home = client.get("/")
     assert home.status_code==200
-    assert "Baixar aplicativo" in home.get_data(as_text=True)
     assert client.get("/admin/").status_code==302
-    apk = client.get("/baixar-aplicativo")
-    assert apk.status_code == 200
-    assert apk.data.startswith(b"PK")
-    assert "stylo-gestao.apk" in apk.headers["Content-Disposition"]
+    assert client.get("/admin/baixar-aplicativo").status_code==302
 
 def test_quote_pdf_is_downloadable(app):
     with app.app_context():
@@ -42,6 +38,13 @@ def test_quote_pdf_is_downloadable(app):
     with client.session_transaction() as session:
         session["_user_id"] = str(user_id)
         session["_fresh"] = True
+
+    dashboard = client.get("/admin/")
+    assert "Baixar aplicativo" in dashboard.get_data(as_text=True)
+    apk = client.get("/admin/baixar-aplicativo")
+    assert apk.status_code == 200
+    assert apk.data.startswith(b"PK")
+    assert "stylo-gestao.apk" in apk.headers["Content-Disposition"]
 
     add_response = client.post(f"/admin/orcamentos/{quote_id}", data={"product_id": str(product_id), "quantity": "3", "unit_price": "25,50"})
     assert add_response.status_code == 302
