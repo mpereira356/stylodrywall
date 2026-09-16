@@ -17,7 +17,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from xml.sax.saxutils import escape
 from ..extensions import db
 from ..models import Product, StockMovement, FinancialEntry, Project, ContactRequest, QuoteItem, Customer, Supplier, Unit, Category, Purchase, PurchaseItem, ProjectMaterial, Sale, SaleItem
-from ..forms import MovementForm
+from ..forms import MovementForm, ContactForm
 from ..services import move_stock, audit
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -196,6 +196,19 @@ def quote_requests():
     items = query.order_by(ContactRequest.created_at.desc()).all()
     totals = {"all": ContactRequest.query.count(), "new": ContactRequest.query.filter_by(status="Novo").count(), "contacted": ContactRequest.query.filter_by(status="Em contato").count(), "closed": ContactRequest.query.filter_by(status="Concluído").count()}
     return render_template("admin/quotes.html", requests_list=items, totals=totals, current_status=status, search=search)
+
+@bp.route("/orcamentos/novo", methods=["GET", "POST"])
+def quote_request_new():
+    form = ContactForm()
+    form.submit.label.text = "Criar orçamento"
+    if form.validate_on_submit():
+        quote = ContactRequest(**{field: getattr(form, field).data for field in ["name", "phone", "whatsapp", "email", "service_type", "description", "location", "notes"]})
+        db.session.add(quote); db.session.flush()
+        audit("Orçamento criado no painel", "orcamentos", quote.id, current_user, new={"cliente": quote.name, "serviço": quote.service_type}, ip=request.remote_addr)
+        db.session.commit()
+        flash("Orçamento criado. Agora adicione os materiais e valores.", "success")
+        return redirect(url_for("admin.quote_request_detail", request_id=quote.id))
+    return render_template("admin/quote_new.html", form=form)
 
 @bp.route("/orcamentos/<int:request_id>", methods=["GET", "POST"])
 def quote_request_detail(request_id):

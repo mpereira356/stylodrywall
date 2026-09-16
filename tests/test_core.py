@@ -49,6 +49,26 @@ def test_quote_pdf_is_downloadable(app):
     assert "attachment;" in response.headers["Content-Disposition"]
     assert f"orcamento-{quote_id}.pdf" in response.headers["Content-Disposition"]
 
+def test_admin_can_create_quote(app):
+    with app.app_context():
+        _, user = product()
+        user_id = user.id
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+    response = client.post("/admin/orcamentos/novo", data={
+        "name": "Maria Cliente", "phone": "11988887777", "whatsapp": "",
+        "email": "maria@example.com", "service_type": "Drywall",
+        "location": "Rua Exemplo, 100", "description": "Parede de drywall para o quarto",
+        "notes": "Visita pela manhã",
+    })
+    assert response.status_code == 302
+    with app.app_context():
+        quote = ContactRequest.query.one()
+        assert quote.name == "Maria Cliente"
+        assert quote.location == "Rua Exemplo, 100"
+
 def test_stock_movement_and_history(app):
     with app.app_context():
         item,user=product(); movement=move_stock(item,"Saída",Decimal("2.250"),user)

@@ -1,0 +1,5 @@
+{% extends 'admin/base.html' %}
+{% block admin %}
+<div class="page-heading"><div><a class="detail-back" href="{{url_for('admin.quote_requests')}}"><i class="bi bi-arrow-left"></i> Orçamentos</a><h1>Novo orçamento</h1><p>Cadastre o cliente e as informações iniciais do serviço.</p></div></div>
+<div class="panel quote-new-panel"><form method="post">{{form.hidden_tag()}}<div class="form-grid">{% for field in [form.name,form.phone,form.whatsapp,form.email,form.service_type,form.location] %}<label>{{field.label}}{{field(class_='input')}}{% for error in field.errors %}<small class="field-error">{{error}}</small>{% endfor %}</label>{% endfor %}</div><label>{{form.description.label}}{{form.description(class_='input',rows=5)}}{% for error in form.description.errors %}<small class="field-error">{{error}}</small>{% endfor %}</label><label>{{form.notes.label}}{{form.notes(class_='input',rows=3)}}{% for error in form.notes.errors %}<small class="field-error">{{error}}</small>{% endfor %}</label><div class="form-actions">{{form.submit(class_='btn gold')}}<a class="btn secondary-btn" href="{{url_for('admin.quote_requests')}}">Cancelar</a></div></form></div>
+{% endblock %}
