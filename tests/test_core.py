@@ -4,7 +4,7 @@ import pytest
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
-from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry, StockMovement, Customer, Project, ProjectMaterial
+from app.models import Role, User, Unit, Category, Product, Purchase, PurchaseItem, FinancialEntry, StockMovement, Customer, Project, ProjectMaterial, ContactRequest, QuoteItem
 from app.services import move_stock
 from app.admin.routes import decimal_field
 
@@ -23,6 +23,31 @@ def test_public_and_admin_protection(app):
     client=app.test_client()
     assert client.get("/").status_code==200
     assert client.get("/admin/").status_code==302
+
+def test_quote_pdf_is_downloadable(app):
+    with app.app_context():
+        _, user = product()
+        quote = ContactRequest(name="Cliente Teste", phone="11999999999", email="cliente@example.com", service_type="Forro", description="Forro de drywall na sala", location="São Paulo", status="Novo")
+        db.session.add(quote); db.session.commit()
+        quote_id, user_id, product_id = quote.id, user.id, Product.query.one().id
+
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+
+    add_response = client.post(f"/admin/orcamentos/{quote_id}", data={"product_id": str(product_id), "quantity": "3", "unit_price": "25,50"})
+    assert add_response.status_code == 302
+    with app.app_context():
+        item = QuoteItem.query.one()
+        assert item.total == Decimal("76.50")
+
+    response = client.get(f"/admin/orcamentos/{quote_id}/pdf")
+    assert response.status_code == 200, response.headers.get("Location")
+    assert response.mimetype == "application/pdf"
+    assert response.data.startswith(b"%PDF")
+    assert "attachment;" in response.headers["Content-Disposition"]
+    assert f"orcamento-{quote_id}.pdf" in response.headers["Content-Disposition"]
 
 def test_stock_movement_and_history(app):
     with app.app_context():

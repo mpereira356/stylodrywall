@@ -20,6 +20,9 @@ def create_app(config_object=Config):
     from .auth.routes import bp as auth_bp
     from .admin.routes import bp as admin_bp
     app.register_blueprint(public_bp); app.register_blueprint(auth_bp); app.register_blueprint(admin_bp)
+    from .models import QuoteItem
+    with app.app_context():
+        QuoteItem.__table__.create(bind=db.engine, checkfirst=True)
     @app.template_filter("br_number")
     def br_number(value, places=3):
         try:

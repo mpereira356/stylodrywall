@@ -41,6 +41,11 @@ class FinancialEntry(db.Model):
     def balance(self): return Decimal(self.amount or 0)-Decimal(self.paid_amount or 0)
 class ContactRequest(db.Model):
     id=db.Column(db.Integer,primary_key=True); name=db.Column(db.String(140),nullable=False); phone=db.Column(db.String(30),nullable=False); whatsapp=db.Column(db.String(30)); email=db.Column(db.String(180)); service_type=db.Column(db.String(100)); description=db.Column(db.Text,nullable=False); location=db.Column(db.String(200)); notes=db.Column(db.Text); status=db.Column(db.String(20),default="Novo"); created_at=db.Column(db.DateTime(timezone=True),default=now,index=True)
+    items=db.relationship("QuoteItem",back_populates="quote",cascade="all, delete-orphan",order_by="QuoteItem.id")
+    @property
+    def total(self): return sum((Decimal(item.total or 0) for item in self.items),Decimal(0))
+class QuoteItem(db.Model):
+    id=db.Column(db.Integer,primary_key=True); quote_id=db.Column(db.Integer,db.ForeignKey("contact_request.id"),nullable=False,index=True); product_id=db.Column(db.Integer,db.ForeignKey("product.id"),nullable=False); quantity=db.Column(qty,nullable=False); unit_price=db.Column(money,nullable=False); total=db.Column(money,nullable=False); quote=db.relationship(ContactRequest,back_populates="items"); product=db.relationship(Product)
 class Service(db.Model):
     id=db.Column(db.Integer,primary_key=True); name=db.Column(db.String(140),nullable=False); description=db.Column(db.Text,nullable=False); icon=db.Column(db.String(40),default="bi-tools"); active=db.Column(db.Boolean,default=True); position=db.Column(db.Integer,default=0)
 class AuditLog(db.Model):

@@ -1,14 +1,22 @@
 from decimal import Decimal, InvalidOperation
 from datetime import date, datetime, timezone
+from io import BytesIO
 import calendar
 import math
 import re
 import unicodedata
 from math import ceil
-from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app
+from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file
 from flask_login import login_required, current_user
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from xml.sax.saxutils import escape
 from ..extensions import db
-from ..models import Product, StockMovement, FinancialEntry, Project, ContactRequest, Customer, Supplier, Unit, Category, Purchase, PurchaseItem, ProjectMaterial, Sale, SaleItem
+from ..models import Product, StockMovement, FinancialEntry, Project, ContactRequest, QuoteItem, Customer, Supplier, Unit, Category, Purchase, PurchaseItem, ProjectMaterial, Sale, SaleItem
 from ..forms import MovementForm
 from ..services import move_stock, audit
 
@@ -189,10 +197,100 @@ def quote_requests():
     totals = {"all": ContactRequest.query.count(), "new": ContactRequest.query.filter_by(status="Novo").count(), "contacted": ContactRequest.query.filter_by(status="Em contato").count(), "closed": ContactRequest.query.filter_by(status="Concluído").count()}
     return render_template("admin/quotes.html", requests_list=items, totals=totals, current_status=status, search=search)
 
-@bp.route("/orcamentos/<int:request_id>")
+@bp.route("/orcamentos/<int:request_id>", methods=["GET", "POST"])
 def quote_request_detail(request_id):
     quote = db.get_or_404(ContactRequest, request_id)
-    return render_template("admin/quote_detail.html", quote=quote)
+    if request.method == "POST":
+        try:
+            product = db.get_or_404(Product, int(request.form["product_id"]))
+            quantity = decimal_field("quantity")
+            unit_price = decimal_field("unit_price")
+            if quantity <= 0: raise ValueError("A quantidade precisa ser maior que zero.")
+            if unit_price < 0: raise ValueError("O valor unitário não pode ser negativo.")
+            item = QuoteItem(quote=quote, product=product, quantity=quantity, unit_price=unit_price, total=quantity * unit_price)
+            db.session.add(item)
+            audit("Material adicionado ao orçamento", "orcamentos", quote.id, current_user, new={"produto": product.name, "quantidade": str(quantity), "valor_unitario": str(unit_price)}, ip=request.remote_addr)
+            db.session.commit(); flash("Material adicionado ao orçamento.", "success")
+            return redirect(url_for("admin.quote_request_detail", request_id=quote.id))
+        except (ValueError, KeyError) as error:
+            db.session.rollback(); flash(str(error), "danger")
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
+    return render_template("admin/quote_detail.html", quote=quote, products=products)
+
+@bp.post("/orcamentos/<int:request_id>/itens/<int:item_id>/remover")
+def quote_item_delete(request_id, item_id):
+    quote = db.get_or_404(ContactRequest, request_id)
+    item = QuoteItem.query.filter_by(id=item_id, quote_id=quote.id).first_or_404()
+    audit("Material removido do orçamento", "orcamentos", quote.id, current_user, old={"produto": item.product.name, "quantidade": str(item.quantity)}, ip=request.remote_addr)
+    db.session.delete(item); db.session.commit()
+    flash("Material removido do orçamento.", "success")
+    return redirect(url_for("admin.quote_request_detail", request_id=quote.id))
+
+@bp.route("/orcamentos/<int:request_id>/pdf")
+def quote_request_pdf(request_id):
+    quote = db.get_or_404(ContactRequest, request_id)
+    output = BytesIO()
+    document = SimpleDocTemplate(
+        output, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm,
+        topMargin=16 * mm, bottomMargin=16 * mm,
+        title=f"Solicitacao de orcamento #{quote.id}", author="Stylo Drywall",
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="Brand", parent=styles["Title"], fontName="Helvetica-Bold", fontSize=22, leading=26, textColor=colors.HexColor("#171816"), alignment=TA_CENTER, spaceAfter=2 * mm))
+    styles.add(ParagraphStyle(name="Subtitle", parent=styles["Normal"], fontSize=9, leading=12, textColor=colors.HexColor("#80642f"), alignment=TA_CENTER, spaceAfter=8 * mm))
+    styles.add(ParagraphStyle(name="Section", parent=styles["Heading2"], fontName="Helvetica-Bold", fontSize=12, leading=15, textColor=colors.HexColor("#171816"), spaceBefore=5 * mm, spaceAfter=3 * mm))
+    styles.add(ParagraphStyle(name="Cell", parent=styles["Normal"], fontSize=9, leading=13))
+    styles.add(ParagraphStyle(name="Label", parent=styles["Cell"], fontName="Helvetica-Bold", textColor=colors.HexColor("#80642f")))
+
+    def text(value, fallback="Não informado"):
+        return escape(str(value).strip()) if value and str(value).strip() else fallback
+
+    def details_table(rows):
+        data = [[Paragraph(text(label), styles["Label"]), Paragraph(text(value), styles["Cell"])] for label, value in rows]
+        table = Table(data, colWidths=[42 * mm, 114 * mm], hAlign="LEFT")
+        table.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f2eee5")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#ddd8cc")),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8), ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ]))
+        return table
+
+    received_at = quote.created_at.strftime("%d/%m/%Y às %H:%M") if quote.created_at else "Não informado"
+    story = [
+        Paragraph("STYLO DRYWALL", styles["Brand"]),
+        Paragraph("SOLICITAÇÃO DE ORÇAMENTO", styles["Subtitle"]),
+        details_table([("Número", f"#{quote.id}"), ("Recebida em", received_at), ("Status", quote.status)]),
+        Paragraph("Dados do cliente", styles["Section"]),
+        details_table([("Nome", quote.name), ("Telefone", quote.phone), ("WhatsApp", quote.whatsapp or quote.phone), ("E-mail", quote.email), ("Local da obra", quote.location)]),
+        Paragraph("Informações do pedido", styles["Section"]),
+        details_table([("Tipo de serviço", quote.service_type), ("Descrição", quote.description), ("Observações", quote.notes or "Nenhuma observação.")]),
+        Paragraph("Materiais e valores", styles["Section"]),
+    ]
+    if quote.items:
+        material_data = [[Paragraph(value, styles["Label"]) for value in ["Material", "Qtd.", "Valor unitário", "Total"]]]
+        for item in quote.items:
+            material_data.append([
+                Paragraph(text(item.product.name), styles["Cell"]),
+                Paragraph(f"{item.quantity} {text(item.product.unit.code)}", styles["Cell"]),
+                Paragraph(f"R$ {item.unit_price:.2f}".replace(".", ","), styles["Cell"]),
+                Paragraph(f"R$ {item.total:.2f}".replace(".", ","), styles["Cell"]),
+            ])
+        materials = Table(material_data, colWidths=[74 * mm, 24 * mm, 30 * mm, 28 * mm], repeatRows=1)
+        materials.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#c9a35b")),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#ddd8cc")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+        ]))
+        story.extend([materials, Spacer(1, 4 * mm), Paragraph(f"<b>VALOR TOTAL: R$ {quote.total:.2f}</b>".replace(".", ","), styles["Section"])])
+    else:
+        story.append(Paragraph("Nenhum material foi adicionado a este orçamento.", styles["Cell"]))
+    story.extend([Spacer(1, 10 * mm), Paragraph("Documento gerado pelo sistema Stylo Drywall.", styles["Subtitle"])])
+    document.build(story)
+    output.seek(0)
+    return send_file(output, mimetype="application/pdf", as_attachment=True, download_name=f"orcamento-{quote.id}.pdf")
 
 @bp.post("/orcamentos/<int:request_id>/status")
 def quote_request_status(request_id):
