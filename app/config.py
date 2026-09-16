@@ -10,7 +10,7 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
-    MAX_CONTENT_LENGTH = 8 * 1024 * 1024
+    MAX_CONTENT_LENGTH = 128 * 1024 * 1024
     ALLOW_NEGATIVE_STOCK = os.getenv("ALLOW_NEGATIVE_STOCK", "false").lower() == "true"
     WHATSAPP_NUMBER = os.getenv("WHATSAPP_NUMBER", "5511958438414")
     DEBUG = os.getenv("FLASK_ENV") == "development"

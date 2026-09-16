@@ -3,10 +3,13 @@ from datetime import date, datetime, timezone
 from io import BytesIO
 import calendar
 import math
+import os
 import re
+import sqlite3
+import tempfile
 import unicodedata
 from math import ceil
-from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file
+from flask import Blueprint, render_template, flash, redirect, url_for, request, current_app, send_file, after_this_request
 from flask_login import login_required, current_user
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -717,7 +720,62 @@ def financial():
 @bp.route("/relatorios")
 def reports():
     products = Product.query.filter_by(active=True).all(); projects = Project.query.all(); purchases = Purchase.query.all()
-    return render_template("admin/reports.html", stock_value=sum((Decimal(x.current_quantity or 0)*Decimal(x.average_cost or 0) for x in products),Decimal(0)), low_count=sum(x.low_stock for x in products), purchase_total=sum((Decimal(x.total or 0) for x in purchases),Decimal(0)), projects=projects)
+    backup_available = db.engine.url.get_backend_name() == "sqlite" and db.engine.url.database not in {None, ":memory:"}
+    return render_template("admin/reports.html", stock_value=sum((Decimal(x.current_quantity or 0)*Decimal(x.average_cost or 0) for x in products),Decimal(0)), low_count=sum(x.low_stock for x in products), purchase_total=sum((Decimal(x.total or 0) for x in purchases),Decimal(0)), projects=projects, backup_available=backup_available)
+
+@bp.get("/relatorios/banco/exportar")
+def database_export():
+    if db.engine.url.get_backend_name() != "sqlite" or db.engine.url.database in {None, ":memory:"}:
+        flash("A exportação direta está disponível somente para o banco SQLite.", "danger")
+        return redirect(url_for("admin.reports"))
+    source_path = os.path.abspath(db.engine.url.database)
+    handle, backup_path = tempfile.mkstemp(prefix="stylo-backup-", suffix=".db")
+    os.close(handle)
+    source = sqlite3.connect(source_path)
+    destination = sqlite3.connect(backup_path)
+    try:
+        source.backup(destination)
+    finally:
+        destination.close(); source.close()
+    @after_this_request
+    def remove_temporary_backup(response):
+        try: os.remove(backup_path)
+        except OSError: pass
+        return response
+    filename = f"stylo-drywall-backup-{datetime.now().strftime('%Y-%m-%d-%H%M')}.db"
+    return send_file(backup_path, mimetype="application/vnd.sqlite3", as_attachment=True, download_name=filename)
+
+@bp.post("/relatorios/banco/importar")
+def database_import():
+    if db.engine.url.get_backend_name() != "sqlite" or db.engine.url.database in {None, ":memory:"}:
+        flash("A restauração direta está disponível somente para o banco SQLite.", "danger")
+        return redirect(url_for("admin.reports"))
+    uploaded = request.files.get("backup")
+    if not uploaded or not uploaded.filename.lower().endswith((".db", ".sqlite", ".sqlite3")):
+        flash("Selecione um arquivo de backup SQLite válido.", "danger")
+        return redirect(url_for("admin.reports"))
+    handle, upload_path = tempfile.mkstemp(prefix="stylo-restore-", suffix=".db")
+    os.close(handle); uploaded.save(upload_path)
+    try:
+        source = sqlite3.connect(upload_path)
+        integrity = source.execute("PRAGMA integrity_check").fetchone()[0]
+        tables = {row[0] for row in source.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        required = {"user", "role", "product", "contact_request", "financial_entry"}
+        if integrity != "ok" or not required.issubset(tables):
+            source.close(); raise ValueError("O arquivo não é um backup válido do sistema Stylo Drywall.")
+        destination_path = os.path.abspath(db.engine.url.database)
+        db.session.remove(); db.engine.dispose()
+        destination = sqlite3.connect(destination_path)
+        try: source.backup(destination)
+        finally: destination.close(); source.close()
+        QuoteItem.__table__.create(bind=db.engine, checkfirst=True)
+        flash("Banco de dados restaurado com sucesso. Os dados da cópia já estão ativos.", "success")
+    except (sqlite3.DatabaseError, ValueError) as error:
+        flash(str(error), "danger")
+    finally:
+        try: os.remove(upload_path)
+        except OSError: pass
+    return redirect(url_for("admin.reports"))
 
 @bp.route("/<module>")
 def module_page(module):

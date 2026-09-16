@@ -1,4 +1,5 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, current_app
+from pathlib import Path
+from flask import Blueprint, render_template, redirect, url_for, flash, current_app, send_from_directory
 from ..extensions import db
 from ..forms import ContactForm
 from ..models import Service, ContactRequest
@@ -8,7 +9,11 @@ DEFAULT_SERVICES=[("Forros de Gesso e Drywall","Soluções precisas para ambient
 @bp.route("/")
 def home():
     services=Service.query.filter_by(active=True).order_by(Service.position).all()
-    return render_template("public/home.html",services=services or DEFAULT_SERVICES,whatsapp=current_app.config["WHATSAPP_NUMBER"])
+    apk_path = Path(current_app.static_folder) / "downloads" / "stylo-gestao.apk"
+    return render_template("public/home.html",services=services or DEFAULT_SERVICES,whatsapp=current_app.config["WHATSAPP_NUMBER"],apk_available=apk_path.is_file())
+@bp.route("/baixar-aplicativo")
+def download_app():
+    return send_from_directory(Path(current_app.static_folder) / "downloads", "stylo-gestao.apk", as_attachment=True, download_name="stylo-gestao.apk")
 @bp.route("/orcamento",methods=["GET","POST"])
 def quote_request():
     form=ContactForm()
@@ -16,4 +21,3 @@ def quote_request():
         request=ContactRequest(**{field:getattr(form,field).data for field in ["name","phone","whatsapp","email","service_type","description","location","notes"]})
         db.session.add(request); db.session.commit(); flash("Solicitação recebida! Nossa equipe entrará em contato.","success"); return redirect(url_for("public.home")+"#contato")
     return render_template("public/contact.html",form=form)
-

@@ -1,5 +1,6 @@
 from decimal import Decimal
 from datetime import date
+from io import BytesIO
 import pytest
 from app import create_app
 from app.config import TestConfig
@@ -21,8 +22,14 @@ def product():
 
 def test_public_and_admin_protection(app):
     client=app.test_client()
-    assert client.get("/").status_code==200
+    home = client.get("/")
+    assert home.status_code==200
+    assert "Baixar aplicativo" in home.get_data(as_text=True)
     assert client.get("/admin/").status_code==302
+    apk = client.get("/baixar-aplicativo")
+    assert apk.status_code == 200
+    assert apk.data.startswith(b"PK")
+    assert "stylo-gestao.apk" in apk.headers["Content-Disposition"]
 
 def test_quote_pdf_is_downloadable(app):
     with app.app_context():
@@ -88,6 +95,33 @@ def test_admin_can_delete_quote_and_its_items(app):
     with app.app_context():
         assert db.session.get(ContactRequest, quote_id) is None
         assert QuoteItem.query.count() == 0
+
+def test_database_backup_can_be_exported_and_restored(tmp_path):
+    database_path = tmp_path / "backup-test.db"
+    class FileDatabaseConfig(TestConfig):
+        SQLALCHEMY_DATABASE_URI = f"sqlite:///{database_path.as_posix()}"
+    backup_app = create_app(FileDatabaseConfig)
+    with backup_app.app_context():
+        db.create_all()
+        role = Role(name="ADMINISTRADOR")
+        user = User(name="Backup", email="backup@stylo.local", password_hash="x", role=role)
+        db.session.add_all([role, user]); db.session.commit()
+        user_id = user.id
+    client = backup_app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+    exported = client.get("/admin/relatorios/banco/exportar")
+    assert exported.status_code == 200
+    assert exported.data.startswith(b"SQLite format 3")
+    with backup_app.app_context():
+        db.session.add(Customer(name="Dado posterior ao backup")); db.session.commit()
+        assert Customer.query.count() == 1
+    restored = client.post("/admin/relatorios/banco/importar", data={"backup": (BytesIO(exported.data), "copia.db")}, content_type="multipart/form-data")
+    assert restored.status_code == 302
+    with backup_app.app_context():
+        assert Customer.query.count() == 0
+        db.session.remove(); db.drop_all()
 
 def test_stock_movement_and_history(app):
     with app.app_context():
