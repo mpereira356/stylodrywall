@@ -60,7 +60,8 @@ def dashboard():
     recent = StockMovement.query.order_by(StockMovement.created_at.desc()).limit(7).all()
     lows = [p for p in products if p.low_stock]
     chart_data = {"labels": labels, "revenue": revenue_data, "expenses": expense_data, "stock_in": stock_in_data, "stock_out": stock_out_data}
-    return render_template("admin/dashboard.html", metrics=metrics, recent=recent, movements=recent, low_products=lows, low_stock=lows, chart_data=chart_data)
+    is_android_app = "StyloDrywallApp" in request.headers.get("User-Agent", "")
+    return render_template("admin/dashboard.html", metrics=metrics, recent=recent, movements=recent, low_products=lows, low_stock=lows, chart_data=chart_data, show_app_download=not is_android_app)
 
 @bp.get("/baixar-aplicativo")
 def download_app():

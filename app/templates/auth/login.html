@@ -19,6 +19,7 @@
         <div class="input-icon"><i class="bi bi-lock"></i>{{ form.password(class_='input', placeholder='Digite sua senha', autocomplete='current-password') }}</div>
         {% for error in form.password.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
       </label>
+      <label class="remember-login">{{ form.remember() }}<span>{{ form.remember.label.text }}</span></label>
       {{ form.submit(class_='btn gold wide login-submit') }}
     </form>
     <a href="{{ url_for('public.home') }}" class="login-back"><i class="bi bi-arrow-left"></i> Voltar ao site</a>

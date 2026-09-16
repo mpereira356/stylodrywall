@@ -14,7 +14,7 @@ def login():
     if form.validate_on_submit():
         user=User.query.filter_by(email=form.username.data.lower().strip(),active=True).first()
         if user and check_password_hash(user.password_hash,form.password.data):
-            session.clear(); login_user(user); return redirect(url_for("admin.dashboard"))
+            session.clear(); login_user(user, remember=form.remember.data); return redirect(url_for("admin.dashboard"))
         flash("Usuário ou senha inválidos.","danger")
     return render_template("auth/login.html",form=form)
 @bp.post("/logout")

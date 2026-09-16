@@ -2,6 +2,7 @@ from decimal import Decimal
 from datetime import date
 from io import BytesIO
 import pytest
+from werkzeug.security import generate_password_hash
 from app import create_app
 from app.config import TestConfig
 from app.extensions import db
@@ -26,6 +27,17 @@ def test_public_and_admin_protection(app):
     assert home.status_code==200
     assert client.get("/admin/").status_code==302
     assert client.get("/admin/baixar-aplicativo").status_code==302
+    assert "Manter conectado" in client.get("/auth/login").get_data(as_text=True)
+
+def test_login_can_remember_device(app):
+    with app.app_context():
+        role = Role(name="ADMINISTRADOR")
+        user = User(name="Administrador", email="admin@stylo.local", password_hash=generate_password_hash("senha-segura"), role=role)
+        db.session.add_all([role, user]); db.session.commit()
+    response = app.test_client().post("/auth/login", data={"username": "admin@stylo.local", "password": "senha-segura", "remember": "y"})
+    cookies = response.headers.getlist("Set-Cookie")
+    assert response.status_code == 302
+    assert any("remember_token=" in cookie and "Expires=" in cookie for cookie in cookies)
 
 def test_quote_pdf_is_downloadable(app):
     with app.app_context():
@@ -41,6 +53,8 @@ def test_quote_pdf_is_downloadable(app):
 
     dashboard = client.get("/admin/")
     assert "Baixar aplicativo" in dashboard.get_data(as_text=True)
+    app_dashboard = client.get("/admin/", headers={"User-Agent": "Android StyloDrywallApp/1.1"})
+    assert "Baixar aplicativo" not in app_dashboard.get_data(as_text=True)
     apk = client.get("/admin/baixar-aplicativo")
     assert apk.status_code == 200
     assert apk.data.startswith(b"PK")

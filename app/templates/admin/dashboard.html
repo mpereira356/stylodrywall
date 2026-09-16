@@ -4,7 +4,7 @@
 <h1>Dashboard</h1>
 <p>Indicadores calculados com as informações cadastradas.</p>
 </div>
-<a class="btn dark-btn" href="{{url_for('admin.download_app')}}"><i class="bi bi-android2"></i> Baixar aplicativo</a>
+{% if show_app_download %}<a class="btn dark-btn" href="{{url_for('admin.download_app')}}"><i class="bi bi-android2"></i> Baixar aplicativo</a>{% endif %}
 </div>
 <div class="kpis dashboard-kpis">
 <article>

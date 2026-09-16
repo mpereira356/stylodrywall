@@ -20,6 +20,7 @@ public class MainActivity extends Activity {
         webView.getSettings().setDomStorageEnabled(true);
         webView.getSettings().setLoadWithOverviewMode(true);
         webView.getSettings().setUseWideViewPort(true);
+        webView.getSettings().setUserAgentString(webView.getSettings().getUserAgentString() + " StyloDrywallApp/1.1");
         CookieManager.getInstance().setAcceptCookie(true);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
         webView.setWebChromeClient(new WebChromeClient());
@@ -33,5 +34,6 @@ public class MainActivity extends Activity {
         if (state == null) webView.loadUrl(PANEL_URL); else webView.restoreState(state);
     }
     @Override protected void onSaveInstanceState(Bundle out) { webView.saveState(out); super.onSaveInstanceState(out); }
+    @Override protected void onPause() { CookieManager.getInstance().flush(); super.onPause(); }
     @Override public void onBackPressed() { if (webView.canGoBack()) webView.goBack(); else super.onBackPressed(); }
 }
