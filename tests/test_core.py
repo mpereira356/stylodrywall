@@ -52,15 +52,18 @@ def test_quote_pdf_is_downloadable(app):
 def test_admin_can_create_quote(app):
     with app.app_context():
         _, user = product()
+        customer = Customer(name="Maria Cliente", phone="11988887777", whatsapp="11988887777", email="maria@example.com", address="Rua Exemplo, 100")
+        db.session.add(customer); db.session.commit()
         user_id = user.id
+        customer_id = customer.id
     client = app.test_client()
     with client.session_transaction() as session:
         session["_user_id"] = str(user_id)
         session["_fresh"] = True
     response = client.post("/admin/orcamentos/novo", data={
-        "name": "Maria Cliente", "phone": "11988887777", "whatsapp": "",
-        "email": "maria@example.com", "service_type": "Drywall",
-        "location": "Rua Exemplo, 100", "description": "Parede de drywall para o quarto",
+        "customer_id": str(customer_id), "name": "", "phone": "", "whatsapp": "",
+        "email": "", "service_type": "Drywall", "location": "",
+        "description": "Parede de drywall para o quarto",
         "notes": "Visita pela manhã",
     })
     assert response.status_code == 302
@@ -68,6 +71,23 @@ def test_admin_can_create_quote(app):
         quote = ContactRequest.query.one()
         assert quote.name == "Maria Cliente"
         assert quote.location == "Rua Exemplo, 100"
+
+def test_admin_can_delete_quote_and_its_items(app):
+    with app.app_context():
+        item, user = product()
+        quote = ContactRequest(name="Cliente", phone="11999999999", description="Orçamento para parede")
+        quote_item = QuoteItem(quote=quote, product=item, quantity=Decimal("2"), unit_price=Decimal("15"), total=Decimal("30"))
+        db.session.add_all([quote, quote_item]); db.session.commit()
+        quote_id, user_id = quote.id, user.id
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["_user_id"] = str(user_id)
+        session["_fresh"] = True
+    response = client.post(f"/admin/orcamentos/{quote_id}/remover")
+    assert response.status_code == 302
+    with app.app_context():
+        assert db.session.get(ContactRequest, quote_id) is None
+        assert QuoteItem.query.count() == 0
 
 def test_stock_movement_and_history(app):
     with app.app_context():

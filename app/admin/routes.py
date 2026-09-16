@@ -201,6 +201,16 @@ def quote_requests():
 def quote_request_new():
     form = ContactForm()
     form.submit.label.text = "Criar orçamento"
+    selected_customer = None
+    customer_id = request.form.get("customer_id", type=int)
+    if customer_id:
+        selected_customer = db.session.get(Customer, customer_id)
+        if selected_customer and request.method == "POST":
+            form.name.data = selected_customer.name
+            form.phone.data = selected_customer.phone or form.phone.data
+            form.whatsapp.data = selected_customer.whatsapp or form.whatsapp.data
+            form.email.data = selected_customer.email or form.email.data
+            form.location.data = selected_customer.address or form.location.data
     if form.validate_on_submit():
         quote = ContactRequest(**{field: getattr(form, field).data for field in ["name", "phone", "whatsapp", "email", "service_type", "description", "location", "notes"]})
         db.session.add(quote); db.session.flush()
@@ -208,7 +218,8 @@ def quote_request_new():
         db.session.commit()
         flash("Orçamento criado. Agora adicione os materiais e valores.", "success")
         return redirect(url_for("admin.quote_request_detail", request_id=quote.id))
-    return render_template("admin/quote_new.html", form=form)
+    customers = Customer.query.order_by(Customer.name).all()
+    return render_template("admin/quote_new.html", form=form, customers=customers, selected_customer=selected_customer)
 
 @bp.route("/orcamentos/<int:request_id>", methods=["GET", "POST"])
 def quote_request_detail(request_id):
@@ -238,6 +249,15 @@ def quote_item_delete(request_id, item_id):
     db.session.delete(item); db.session.commit()
     flash("Material removido do orçamento.", "success")
     return redirect(url_for("admin.quote_request_detail", request_id=quote.id))
+
+@bp.post("/orcamentos/<int:request_id>/remover")
+def quote_request_delete(request_id):
+    quote = db.get_or_404(ContactRequest, request_id)
+    quote_id = quote.id
+    audit("Orçamento excluído", "orcamentos", quote_id, current_user, old={"cliente": quote.name, "itens": len(quote.items), "total": str(quote.total)}, ip=request.remote_addr)
+    db.session.delete(quote); db.session.commit()
+    flash(f"Orçamento #{quote_id} excluído com sucesso.", "success")
+    return redirect(url_for("admin.quote_requests"))
 
 @bp.route("/orcamentos/<int:request_id>/pdf")
 def quote_request_pdf(request_id):
